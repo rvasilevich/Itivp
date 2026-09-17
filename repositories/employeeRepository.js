@@ -1,0 +1,59 @@
+const { Employee } = require('../models');
+
+// Репозиторий сотрудников — работа с данными через Sequelize (PostgreSQL)
+class EmployeeRepository {
+  // Получить всех сотрудников
+  async findAll() {
+    return Employee.findAll();
+  }
+
+  // Получить сотрудника по ID
+  async findById(id) {
+    return Employee.findByPk(id);
+  }
+
+  // Создать нового сотрудника
+  async create(data) {
+    return Employee.create({
+      name: data.name.trim(),
+      position: data.position.trim(),
+      department: data.department.trim(),
+      rating: data.rating,
+      reviewDate: data.reviewDate,
+      email: data.email ? data.email.trim() : null
+    });
+  }
+
+  // Полностью обновить сотрудника
+  async update(id, data) {
+    const employee = await Employee.findByPk(id);
+
+    if (!employee) {
+      return null;
+    }
+
+    employee.name = data.name.trim();
+    employee.position = data.position.trim();
+    employee.department = data.department.trim();
+    employee.rating = data.rating;
+    employee.reviewDate = data.reviewDate;
+    employee.email = data.email ? data.email.trim() : null;
+
+    await employee.save();
+    return employee;
+  }
+
+  // Удалить сотрудника
+  async delete(id) {
+    const employee = await Employee.findByPk(id);
+
+    if (!employee) {
+      return null;
+    }
+
+    await employee.destroy();
+    return employee;
+  }
+}
+
+module.exports = EmployeeRepository;
