@@ -24,6 +24,8 @@ REST API для управления оценкой эффективности �
 - Express.js
 - Sequelize (ORM)
 - PostgreSQL
+- JSON Web Token (jsonwebtoken)
+- bcrypt (хеширование паролей)
 - Nodemon (для разработки)
 
 ## Установка и настройка
@@ -114,6 +116,41 @@ npm start            # обычный запуск
 | 404 | Сотрудник с указанным ID не найден         |
 | 500 | Внутренняя ошибка сервера                  |
 
+### Аутентификация: JWT + RBAC
+
+Помимо сотрудников (`Employee`) в приложении есть пользователи (`User`) с
+ролью **user** или **admin** (ролевая модель). Регистрация и вход работают на
+**JWT** (токен живёт 1 час) и **bcrypt** (хеширование паролей).
+
+| Метод  | Эндпоинт                        | Доступ            | Описание                                        |
+|--------|---------------------------------|-------------------|-------------------------------------------------|
+| POST   | `/api/v1/auth/register`         | все               | Регистрация (`email`, `password`) → 201         |
+| POST   | `/api/v1/auth/login`            | все               | Вход → `{ token, user }`                        |
+| GET    | `/api/v1/profile`               | авторизованные    | Данные текущего пользователя                    |
+| DELETE | `/api/v1/profile`               | авторизованные    | Удалить свою учётную запись                     |
+| GET    | `/api/v1/admin/users`           | admin             | Список всех пользователей                       |
+| GET    | `/api/v1/admin/users/:id`       | admin             | Пользователь по ID                             |
+| PATCH  | `/api/v1/admin/users/:id/role`  | admin             | Сменить роль (`user`/`admin`)                  |
+| DELETE | `/api/v1/admin/users/:id`       | admin             | Удалить пользователя                            |
+
+Авторизация: заголовок `Authorization: Bearer <token>`. Маршруты `/admin`
+дополнительно проверяют роль через middleware `isAdmin`.
+
+```bash
+# Регистрация
+curl -X POST http://localhost:3000/api/v1/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"user@example.com","password":"secret123"}'
+
+# Вход
+curl -X POST http://localhost:3000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@example.com","password":"Admin123!"}'
+```
+
+Демо-администратор создаётся сидом: `admin@example.com` / `Admin123!`.
+Секрет JWT хранится в `.env` (переменная `JWT_SECRET`).
+
 ## Архитектура проекта
 
 Проект построен по слоистой архитектуре:
@@ -124,6 +161,9 @@ my-node-app/
 │   ├── api/
 │   │   ├── v1/
 │   │   │   ├── employees.js    # Маршруты сотрудников
+│   │   │   ├── auth.js         # Маршруты аутентификации (register, login)
+│   │   │   ├── profile.js      # Защищённые маршруты текущего пользователя
+│   │   │   ├── admin.js        # Маршруты администратора (RBAC)
 │   │   │   ├── router.js       # Объединение маршрутов v1
 │   │   │   └── index.js
 │   │   └── index.js
@@ -135,19 +175,26 @@ my-node-app/
 │   ├── AppError.js             # Класс ошибок приложения
 │   ├── errorHandler.js         # Глобальный обработчик ошибок
 │   └── index.js
+├── middleware/                 # Middleware безопасности
+│   ├── auth.js                 # Проверка JWT (Authorization: Bearer <token>)
+│   └── isAdmin.js              # RBAC: доступ только для роли admin
 ├── migrations/                 # Миграции базы данных
 ├── models/                     # Модели данных (Sequelize)
-│   ├── employee.js              # Модель сотрудника
+│   ├── employee.js             # Модель сотрудника
+│   ├── user.js                 # Модель пользователя (email, passwordHash, role)
 │   └── index.js
 ├── repositories/               # Слой доступа к данным
-│   ├── employeeRepository.js    # Работа с данными (Sequelize/PostgreSQL)
+│   ├── employeeRepository.js   # Работа с данными сотрудников
+│   ├── userRepository.js       # Работа с данными пользователей
 │   └── index.js
 ├── schemas/                    # Схемы валидации
-│   ├── employeeSchema.js        # Валидация данных сотрудника
+│   ├── employeeSchema.js       # Валидация данных сотрудника
+│   ├── authSchema.js           # Валидация аутентификации и ролей
 │   └── index.js
 ├── seeders/                    # Сиды (тестовые данные)
 ├── services/                   # Бизнес-логика
-│   ├── employeeService.js       # Сервис сотрудников
+│   ├── employeeService.js      # Сервис сотрудников
+│   ├── authService.js          # Сервис аутентификации (JWT + RBAC)
 │   └── index.js
 ├── server.js                   # Точка входа
 ├── .env                        # Переменные окружения (не в git)
