@@ -1,8 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { DEMO_EMPLOYEES } from '../data/demoEmployees';
-
-// Ключ, по которому список хранится в localStorage
-const STORAGE_KEY = 'employees_rating_list_v1';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { API_URL, createEmployee, deleteEmployee, fetchEmployees, updateEmployee } from '../api';
 
 const EMPTY_FORM = {
   name: '',
@@ -13,54 +10,79 @@ const EMPTY_FORM = {
   email: '',
 };
 
+// Пауза (мс) перед отправкой поискового запроса на сервер (debounce)
+const SEARCH_DEBOUNCE_MS = 500;
+
 export default function EmployeeList() {
-  // ---------- useState: данные списка, форма, фильтр/сортировка ----------
-  const [employees, setEmployees] = useState([]);      // массив сотрудников
+  // ---------- useState: данные с сервера, форма, фильтр/сортировка ----------
+  const [employees, setEmployees] = useState([]);      // массив сотрудников (с сервера)
   const [form, setForm] = useState(EMPTY_FORM);        // значения полей ввода
   const [editingId, setEditingId] = useState(null);    // id редактируемого сотрудника
-  const [query, setQuery] = useState('');              // строка поиска
+  const [query, setQuery] = useState('');              // строка поиска (ввод)
+  const [debouncedQuery, setDebouncedQuery] = useState(''); // поиск, отправляемый на сервер
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [sortBy, setSortBy] = useState('name');        // name | rating | department | reviewDate
   const [sortDir, setSortDir] = useState('asc');       // asc | desc
-  const [isLoading, setIsLoading] = useState(true);    // имитация загрузки с сервера
-  const [saveStatus, setSaveStatus] = useState('');    // статус автосохранения
+  const [isLoading, setIsLoading] = useState(true);    // первичная загрузка с сервера
+  const [isSearching, setIsSearching] = useState(false); // идёт серверный поиск
+  const [error, setError] = useState(null);            // ошибка загрузки с сервера
+  const [notice, setNotice] = useState(null);          // уведомление об операции CRUD
+  const [retryToken, setRetryToken] = useState(0);     // счётчик нажатий «Повторить»
 
-  // ---------- useEffect (пустой массив): загрузка из localStorage при монтировании ----------
-  // Имитация загрузки с сервера: задержка 1 секунда, затем читаем localStorage.
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          setEmployees(Array.isArray(parsed) ? parsed : DEMO_EMPLOYEES);
-        } else {
-          // Нет сохранённых данных — инициализируем моковыми.
-          setEmployees(DEMO_EMPLOYEES);
-        }
-      } catch {
-        setEmployees(DEMO_EMPLOYEES);
-      } finally {
-        setIsLoading(false);
-      }
-    }, 1000);
-    return () => clearTimeout(timer);
+  const hasDataRef = useRef(false);    // были ли уже успешно получены данные с сервера
+  const noticeTimerRef = useRef(null); // таймер автоскрытия уведомления
+
+  // ---------- Уведомления (toast) ----------
+  const showNotice = useCallback((type, text) => {
+    setNotice({ type, text });
+    clearTimeout(noticeTimerRef.current);
+    noticeTimerRef.current = setTimeout(() => setNotice(null), 4000);
   }, []);
 
-  // ---------- useEffect [employees]: автосохранение в localStorage (debounce 500 мс) ----------
-  const debounceRef = useRef(null);
-  const markDirty = () => setSaveStatus('⏳ Ожидание сохранения…');
+  useEffect(() => () => clearTimeout(noticeTimerRef.current), []);
+
+  // ---------- Загрузка данных с сервера (GET /employees) ----------
+  // Используется для первичной загрузки и для серверного поиска.
+  // signal — AbortSignal, позволяющий отменить устаревший запрос.
+  const loadEmployees = useCallback(async (search, signal) => {
+    const isInitial = !hasDataRef.current;
+    if (isInitial) setIsLoading(true);      // полный индикатор при первой загрузке
+    else if (search) setIsSearching(true);  // лёгкий индикатор при серверном поиске
+    setError(null);
+
+    try {
+      const { data } = await fetchEmployees({ search, signal });
+      if (signal?.aborted) return;          // запрос отменён — результаты устарели
+      setEmployees(data);
+      hasDataRef.current = true;
+    } catch (err) {
+      if (err?.isCanceled || signal?.aborted) return; // отмена запроса — не ошибка
+      setError(err.message || 'Не удалось загрузить данные с сервера');
+    } finally {
+      if (!signal?.aborted) {
+        setIsLoading(false);
+        setIsSearching(false);
+      }
+    }
+  }, []);
+
+  // Запрос при монтировании, при изменении поиска и по кнопке «Повторить».
+  // AbortController отменяет предыдущий запрос (смена строки поиска)
+  // и запрос при размонтировании компонента.
   useEffect(() => {
-    if (isLoading) return; // не сохраняем, пока идёт первичная загрузка
+    const controller = new AbortController();
+    // Обновление состояний загрузки/ошибки внутри эффекта запроса данных —
+    // стандартный паттерн работы с внешней системой (REST API).
+    // oxlint-disable-next-line react/set-state-in-effect
+    loadEmployees(debouncedQuery, controller.signal);
+    return () => controller.abort();
+  }, [debouncedQuery, retryToken, loadEmployees]);
 
-    debounceRef.current = setTimeout(() => {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(employees));
-      const time = new Date().toLocaleTimeString('ru-RU');
-      setSaveStatus(`✅ Сохранено в localStorage в ${time}`);
-    }, 500);
-
-    return () => clearTimeout(debounceRef.current); // сброс таймера при новом изменении
-  }, [employees, isLoading]);
+  // Debounce поиска: запрос на сервер отправляется только после паузы в наборе текста
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query.trim()), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [query]);
 
   // ---------- useEffect [employees.length]: заголовок страницы ----------
   useEffect(() => {
@@ -69,30 +91,26 @@ export default function EmployeeList() {
       : 'Сотрудники — оценка эффективности';
   }, [employees.length]);
   // ---------- Служебные функции ----------
-  const nextId = () =>
-    employees.reduce((max, e) => (e.id > max ? e.id : max), 0) + 1;
-
   const isValidForm = () =>
     form.name.trim() !== '' &&
     form.rating !== '' &&
     Number(form.rating) >= 1 &&
     Number(form.rating) <= 10;
 
-  // ---------- Обработчики формы (добавление / редактирование) ----------
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e) => {
+  // ---------- Добавление (POST) и редактирование (PUT): оптимистичное обновление ----------
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!isValidForm()) {
-      alert('Укажите ФИО и оценку эффективности от 1 до 10.');
+      showNotice('error', 'Укажите ФИО и оценку эффективности от 1 до 10.');
       return;
     }
-    markDirty();
+
     const employee = {
-      id: editingId ?? nextId(),
       name: form.name.trim(),
       position: form.position.trim(),
       department: form.department.trim(),
@@ -101,15 +119,39 @@ export default function EmployeeList() {
       email: form.email.trim(),
     };
 
-    if (editingId) {
-      // Редактирование: заменяем элемент с тем же id.
-      setEmployees((prev) => prev.map((e) => (e.id === editingId ? employee : e)));
+    if (editingId != null) {
+      // ---- РЕДАКТИРОВАНИЕ: сразу обновляем элемент в списке, при ошибке откатываем ----
+      const previous = employees.find((e) => e.id === editingId);
+      setEmployees((prev) => prev.map((e) => (e.id === editingId ? { ...e, ...employee } : e)));
       setEditingId(null);
+      setForm(EMPTY_FORM);
+
+      try {
+        const { data } = await updateEmployee(editingId, employee);
+        // заменяем оптимистичную версию на ответ сервера (актуальные createdAt/updatedAt и т.п.)
+        setEmployees((prev) => prev.map((e) => (e.id === editingId ? data : e)));
+        showNotice('success', '✅ Изменения сохранены на сервере.');
+      } catch (err) {
+        // откат к прежним данным
+        if (previous) setEmployees((prev) => prev.map((e) => (e.id === editingId ? previous : e)));
+        showNotice('error', `❌ Не удалось сохранить изменения: ${err.message}`);
+      }
     } else {
-      // Добавление нового сотрудника.
-      setEmployees((prev) => [...prev, employee]);
+      // ---- ДОБАВЛЕНИЕ: временный ID, после ответа сервера заменяется реальным ----
+      const tempId = `temp-${Date.now()}`; // уникальный временный ID
+      setEmployees((prev) => [...prev, { id: tempId, ...employee }]);
+      setForm(EMPTY_FORM);
+
+      try {
+        const { data } = await createEmployee(employee);
+        // заменяем временный ID на реальный из ответа сервера
+        setEmployees((prev) => prev.map((e) => (e.id === tempId ? data : e)));
+        showNotice('success', '✅ Сотрудник добавлен на сервер.');
+      } catch (err) {
+        setEmployees((prev) => prev.filter((e) => e.id !== tempId)); // откат
+        showNotice('error', `❌ Не удалось добавить сотрудника: ${err.message}`);
+      }
     }
-    setForm(EMPTY_FORM);
   };
 
   const startEdit = (employee) => {
@@ -129,27 +171,27 @@ export default function EmployeeList() {
     setForm(EMPTY_FORM);
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm('Удалить сотрудника?')) {
-      markDirty();
-      setEmployees((prev) => prev.filter((e) => e.id !== id));
-      if (editingId === id) cancelEdit();
-    }
-  };
+  // ---------- Удаление (DELETE): оптимистичное удаление с откатом при ошибке ----------
+  const handleDelete = async (id) => {
+    if (!window.confirm('Удалить сотрудника?')) return;
 
-  const handleReset = () => {
-    if (window.confirm('Сбросить список к демо-данным? Текущие изменения будут потеряны.')) {
-      markDirty();
-      setEmployees(DEMO_EMPLOYEES);
-    }
-  };
+    const index = employees.findIndex((e) => e.id === id);
+    const removed = employees[index];
+    if (editingId === id) cancelEdit();
+    setEmployees((prev) => prev.filter((e) => e.id !== id)); // сразу убираем из списка
 
-  const handleClearStorage = () => {
-    if (window.confirm('Очистить localStorage и показать демо-данные?')) {
-      markDirty();
-      localStorage.removeItem(STORAGE_KEY);
-      setEmployees(DEMO_EMPLOYEES);
-      setSaveStatus('🧹 localStorage очищен. Данные восстановлены из демо.');
+    try {
+      await deleteEmployee(id);
+      showNotice('success', '✅ Сотрудник удалён на сервере.');
+    } catch (err) {
+      // при ошибке возвращаем сотрудника на прежнее место в списке
+      setEmployees((prev) => {
+        if (index === -1) return prev;
+        const next = [...prev];
+        next.splice(index, 0, removed);
+        return next;
+      });
+      showNotice('error', `❌ Не удалось удалить сотрудника: ${err.message}`);
     }
   };
 
@@ -203,20 +245,21 @@ export default function EmployeeList() {
   // ---------- Отрисовка интерфейса ----------
   return (
     <div className="employee-app">
+      {notice && (
+        <div className={`toast toast-${notice.type}`} role="status">
+          {notice.text}
+        </div>
+      )}
+
       <header className="app-header">
         <h1>Оценка эффективности сотрудников</h1>
         <div className="header-meta">
           {isLoading ? (
             <span className="badge badge-loading">⏳ Загрузка данных с сервера…</span>
           ) : (
-            <span className={`badge ${saveStatus.includes('✅') ? 'badge-ok' : 'badge-wait'}`}>
-              {saveStatus}
+            <span className={`badge ${error ? 'badge-error' : 'badge-ok'}`}>
+              {error ? '⚠️ Сервер недоступен' : '✅ Данные загружены с сервера'}
             </span>
-          )}
-          {!isLoading && (
-            <button className="btn btn-ghost btn-small" onClick={handleClearStorage}>
-              🧹 Очистить localStorage
-            </button>
           )}
         </div>
       </header>
@@ -262,7 +305,7 @@ export default function EmployeeList() {
           <input type="text" name="position" placeholder="Должность" value={form.position} onChange={handleChange} />
           <input type="text" name="department" placeholder="Отдел" value={form.department} onChange={handleChange} />
           <input type="number" name="rating" placeholder="Оценка (1–10) *" min="1" max="10" step="0.1" value={form.rating} onChange={handleChange} required />
-          <input type="date" name="reviewDate" value={form.reviewDate} onChange={handleChange} />
+          <input type="date" name="reviewDate" aria-label="Дата оценки" value={form.reviewDate} onChange={handleChange} />
           <input type="email" name="email" placeholder="Email" value={form.email} onChange={handleChange} />
         </div>
         <div className="form-actions">
@@ -274,9 +317,6 @@ export default function EmployeeList() {
               ✖ Отмена
             </button>
           )}
-          <button type="button" className="btn btn-danger" onClick={handleReset}>
-            ↺ Сбросить к демо
-          </button>
         </div>
       </form>
 
@@ -285,10 +325,11 @@ export default function EmployeeList() {
         <input
           type="search"
           className="search-input"
-          placeholder="🔍 Поиск по ФИО, должности или отделу…"
+          placeholder="🔍 Поиск по ФИО, должности или отделу… (на сервере)"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
+        {isSearching && <span className="badge badge-loading">🔍 Поиск на сервере…</span>}
         <select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)}>
           <option value="all">Все отделы</option>
           {departments.map((d) => (
@@ -309,52 +350,81 @@ export default function EmployeeList() {
           {sortDir === 'asc' ? '🔼 По возрастанию' : '🔽 По убыванию'}
         </button>
       </section>
-      {/* ---------- Список сотрудников ---------- */}
+      {/* ---------- Список сотрудников: загрузка / ошибка / пусто / данные ---------- */}
       {isLoading ? (
-        <p className="empty-state">⏳ Имитация загрузки с сервера… (1 секунда)</p>
+        <p className="empty-state">⏳ Получение данных с сервера…</p>
       ) : filteredAndSorted.length === 0 ? (
-        <p className="empty-state">
-          {employees.length === 0
-            ? 'Список пуст. Добавьте первого сотрудника.'
-            : 'По заданным фильтрам ничего не найдено.'}
-        </p>
-      ) : (
-        <ul className="employee-list">
-          {filteredAndSorted.map((e) => (
-            <li
-              key={e.id}
-              className={`employee-item${editingId === e.id ? ' is-editing' : ''}`}
+        error ? (
+          <div className="error-panel" role="alert">
+            <strong>⚠️ Не удалось загрузить данные</strong>
+            <span>{error}</span>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setRetryToken((t) => t + 1)}
             >
-              <div className="employee-info">
-                <strong>{e.name}</strong>
-                <span>{e.position}</span>
-                <span className="department-tag">{e.department}</span>
-                {e.email && <span className="email">{e.email}</span>}
-              </div>
-              <div className="employee-meta">
-                <span className="rating" title="Оценка эффективности">
-                  ⭐ {e.rating}
-                </span>
-                <span className="review-date">
-                  📅 {e.reviewDate ? new Date(e.reviewDate).toLocaleDateString('ru-RU') : '—'}
-                </span>
-              </div>
-              <div className="employee-actions">
-                <button type="button" className="btn btn-small btn-edit" onClick={() => startEdit(e)}>
-                  ✏️ Изменить
-                </button>
-                <button type="button" className="btn btn-small btn-delete" onClick={() => handleDelete(e.id)}>
-                  🗑 Удалить
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+              ↻ Повторить
+            </button>
+          </div>
+        ) : (
+          <p className="empty-state">
+            {employees.length === 0
+              ? 'Список пуст. Добавьте первого сотрудника.'
+              : 'По заданным фильтрам ничего не найдено.'}
+          </p>
+        )
+      ) : (
+        <>
+          {error && (
+            <div className="error-panel error-panel--inline" role="alert">
+              <span>⚠️ {error}</span>
+              <button
+                type="button"
+                className="btn btn-ghost btn-small"
+                onClick={() => setRetryToken((t) => t + 1)}
+              >
+                ↻ Повторить
+              </button>
+            </div>
+          )}
+          <ul className="employee-list">
+            {filteredAndSorted.map((e) => (
+              <li
+                key={e.id}
+                className={`employee-item${editingId === e.id ? ' is-editing' : ''}`}
+              >
+                <div className="employee-info">
+                  <strong>{e.name}</strong>
+                  <span>{e.position}</span>
+                  <span className="department-tag">{e.department}</span>
+                  {e.email && <span className="email">{e.email}</span>}
+                </div>
+                <div className="employee-meta">
+                  <span className="rating" title="Оценка эффективности">
+                    ⭐ {e.rating}
+                  </span>
+                  <span className="review-date">
+                    📅 {e.reviewDate ? new Date(e.reviewDate).toLocaleDateString('ru-RU') : '—'}
+                  </span>
+                </div>
+                <div className="employee-actions">
+                  <button type="button" className="btn btn-small btn-edit" onClick={() => startEdit(e)}>
+                    ✏️ Изменить
+                  </button>
+                  <button type="button" className="btn btn-small btn-delete" onClick={() => handleDelete(e.id)}>
+                    🗑 Удалить
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
 
       <footer className="app-footer">
-        Данные хранятся в <code>localStorage</code> под ключом{' '}
-        <code>employees_rating_list_v1</code>. Показано {filteredAndSorted.length} из {employees.length}.
+        Данные загружаются с REST API <code>{API_URL}</code>. Показано {filteredAndSorted.length} из{' '}
+        {employees.length}. Поиск выполняется на сервере (debounce {SEARCH_DEBOUNCE_MS} мс,
+        устаревшие запросы отменяются).
       </footer>
     </div>
   );

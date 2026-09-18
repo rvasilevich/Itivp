@@ -4,9 +4,10 @@ const { EmployeeService } = require('../../../services');
 const router = express.Router();
 const employeeService = new EmployeeService();
 
-// GET /api/v1/employees — получение списка всех сотрудников
+// GET /api/v1/employees — получение списка всех сотрудников.
+// Поддерживает серверный поиск: ?search=фрагмент (ILIKE по ФИО/должности/отделу/email)
 router.get('/', async (req, res) => {
-  const employees = await employeeService.getAllEmployees();
+  const employees = await employeeService.getAllEmployees({ search: req.query.search });
   res.json(employees);
 });
 

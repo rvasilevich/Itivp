@@ -257,6 +257,9 @@ const { Sequelize } = require('sequelize');
 # GET — список всех сотрудников
 curl http://localhost:3000/api/v1/employees
 
+# GET — серверный поиск (учтются регистр букв, части совпадения по ФИО/должности/отделу/email)
+curl --get http://localhost:3000/api/v1/employees --data-urlencode 'search=разработ'
+
 # GET — сотрудник по ID
 curl http://localhost:3000/api/v1/employees/1
 
@@ -356,6 +359,42 @@ curl -X PATCH http://localhost:3000/api/v1/admin/users/2/role \
 
 ---
 
+## Фронтенд: React-приложение (папка `my-app`)
+
+SPA на React + Vite (лабораторные работы №4–№5). Компонент `EmployeeList` —
+оценка эффективности сотрудников: добавление, редактирование, удаление, поиск,
+фильтрация по отделу и сортировка.
+
+Начиная с ЛР №5 фронтенд **полностью взаимодействует с REST API** сервера:
+
+- `src/api.js` — axios-клиент с автоматической подстановкой JWT-токена из
+  `localStorage` (готова к защите маршрутов middleware `auth`);
+- GET `/employees` — загрузка списка с индикаторами «загрузка / ошибка» и
+  кнопкой «Повторить»;
+- POST / PUT / DELETE `/employees/:id` — CRUD с **оптимистичным обновлением**
+  UI и откатом при ошибке сервера;
+- дополнительное улучшение ЛР №5: **серверный поиск** (`?search=`) с debounce
+  500 мс и отменой устаревших запросов через `AbortController`
+  (при размонтировании компонента тоже).
+
+### Настройка и запуск
+
+```bash
+cd my-app                          # перейти в каталог фронтенда
+npm install                        # установить зависимости (в т.ч. axios)
+# создать my-app/.env (см. my-app/.env.example):
+#   VITE_API_URL=http://localhost:3000/api/v1
+npm run dev                        # dev-сервер Vite (http://localhost:5173)
+npm run build                      # production-сборка в my-app/dist
+npm run lint                       # oxlint — проверка кода (0 warnings)
+npm test                           # vitest — 12 тестов EmployeeList (мок API)
+```
+
+В браузере фронтенд должен открываться на **http://localhost:5173**, сервер —
+на **http://localhost:3000** (CORS включён, см. `server.js`).
+
+---
+
 ## Известные нюансы
 
 1. **Прямой хост `db.<ref>.supabase.co` недоступен с IPv4** — проект сидит за
@@ -367,6 +406,14 @@ curl -X PATCH http://localhost:3000/api/v1/admin/users/2/role \
    работают без ручного `export`.
 4. Пароль в `.env` — файл в `.gitignore`, не коммитить.
 5. `pg`/`pg-hstore` — зависимости драйвера PostgreSQL для Sequelize.
+6. **TLS к Supabase на новых версиях `pg` (8.x):** `sslmode=require` в
+   `DATABASE_URL` трактуется как `verify-full` (проверка цепочки сертификатов).
+   Если при подключении появляется ошибка `self-signed certificate in
+   certificate chain`, используйте libpq-режим:
+   `?sslmode=require&uselibpqcompat=true` (см. предупреждение pg при старте).
+7. В песочнице/корпоративной сети трафик к БД может перехватываться — тогда
+   проверку API удобнее проводить локально у себя на машине (клиент из ЛР №5
+   тестируется автономно, моком API).
 
 ---
 
@@ -393,5 +440,15 @@ curl -X PATCH http://localhost:3000/api/v1/admin/users/2/role \
 | `curl http://localhost:3000/api/v1/auth/register` | Проверить регистрацию (см. раздел «Аутентификация») |
 | `curl http://localhost:3000/api/v1/employees` | Проверить API (GET список) |
 | `npm run check` | Автопроверка задач лаб. работы №2 (selfcheck) |
+| `npm create vite@latest my-app -- --template react` | Создать Vite + React-приложение в папке `my-app` |
+| `cd my-app && npm install` | Установить зависимости фронтенда |
+| `cd my-app && npm run dev` | Запустить React-фронтенд (Vite dev-сервер, :5173) |
+| `cd my-app && npm run build` | Собрать React-приложение (папка `my-app/dist`) |
+| `cd my-app && npm run lint` | Проверить код фронтенда (oxlint) |
+| `cd my-app && npm test` | Запустить тесты компонента EmployeeList (vitest) |
+| `cd my-app && npm install -D vitest jsdom @testing-library/react @testing-library/dom @testing-library/jest-dom` | Установить тестовый стек фронтенда (vitest + jsdom + RTL) |
+| `npm install cors` | Добавить CORS middleware (нужен Client → API, ЛР №5) |
+| `cd my-app && npm install axios` | Установить axios — HTTP-клиент фронтенда (ЛР №5) |
+| `curl --get http://localhost:3000/api/v1/employees --data-urlencode 'search=...'` | Проверить серверный поиск `?search=` (ЛР №5) |
 
 > **Новые ручные команды дописывать в эту таблицу и в соответствующий раздел!**

@@ -1,8 +1,12 @@
 const express = require('express');
+const cors = require('cors');
 const { config, errorHandler } = require('./core');
 const { api } = require('./app');
 
 const app = express();
+
+// CORS — разрешает запросы с клиентского React-приложения (localhost:5173)
+app.use(cors());
 
 // Middleware для парсинга JSON
 app.use(express.json());

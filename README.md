@@ -20,13 +20,19 @@ REST API для управления оценкой эффективности �
 
 ## Технологии
 
+Сервер:
 - Node.js
-- Express.js
+- Express.js (в т.ч. middleware `cors` — CORS для фронтенда)
 - Sequelize (ORM)
 - PostgreSQL
 - JSON Web Token (jsonwebtoken)
 - bcrypt (хеширование паролей)
 - Nodemon (для разработки)
+
+Фронтенд (`my-app/`, лабораторные работы №4–№5):
+- React 19 + Vite
+- axios (HTTP-клиент, REST API)
+- Vitest + Testing Library (тесты с моком API)
 
 ## Установка и настройка
 
@@ -79,6 +85,23 @@ npm start            # обычный запуск
 
 Сервер запускается на порту **3000**.
 
+### 6. Запуск фронтенда (лабораторные работы №4–№5)
+
+Фронтенд (React + Vite, папка `my-app`) обращается к REST API сервера:
+
+```bash
+cd my-app
+npm install                 # установить зависимости (в т.ч. axios)
+# создайте my-app/.env (см. .env.example):
+#   VITE_API_URL=http://localhost:3000/api/v1
+npm run dev                 # Vite dev-сервер на http://localhost:5173
+npm test                    # vitest — 12 тестов (мок API)
+npm run lint                # oxlint — 0 warnings
+npm run build               # production-сборка в my-app/dist
+```
+
+Полный список команд — в `RUNBOOK.md`.
+
 ## API
 
 Базовый URL: `http://localhost:3000/api/v1`
@@ -92,6 +115,10 @@ npm start            # обычный запуск
 | POST   | `/api/v1/employees`          | Добавить нового сотрудника            |
 | PUT    | `/api/v1/employees/:id`      | Полностью обновить данные сотрудника  |
 | DELETE | `/api/v1/employees/:id`      | Удалить сотрудника                    |
+
+> GET `/api/v1/employees?search=<фрагмент>` — серверный поиск без учёта регистра
+> (ILIKE) по ФИО, должности, отделу и email. Используется фронтендом в ЛР №5
+> с debounce на ввод.
 
 ### Пример тела запроса (POST / PUT)
 
@@ -200,6 +227,21 @@ my-node-app/
 ├── .env                        # Переменные окружения (не в git)
 ├── package.json
 └── README.md
+```
+
+Фронтенд (лабораторные работы №4–№5) — отдельное Vite + React SPA в `my-app/`:
+
+```
+my-app/
+├── .env                        # VITE_API_URL (не в git), шаблон — .env.example
+├── src/
+│   ├── api.js                  # axios-клиент REST API (JWT-перехватчик, CRUD-функции)
+│   ├── App.jsx
+│   ├── components/
+│   │   ├── EmployeeList.jsx    # список: GET/POST/PUT/DELETE, loading/error, поиск
+│   │   └── EmployeeList.test.jsx  # vitest-тесты с моком api
+│   └── data/demoEmployees.js   # эталонная структура объекта Employee
+└── vite.config.js
 ```
 
 ### Слои и их ответственность
