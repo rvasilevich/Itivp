@@ -1,6 +1,7 @@
 // Моковые данные, повторяющие структуру REST API (модель Employee):
 // id, name, position, department, rating (1..10), reviewDate (YYYY-MM-DD), email.
-// Используются, если в localStorage ещё ничего не сохранено.
+// В ЛР №5 используются как эталонная структура объекта Employee в тестах
+// (мок ответа сервера в EmployeeList.test.jsx).
 export const DEMO_EMPLOYEES = [
   {
     id: 1,
