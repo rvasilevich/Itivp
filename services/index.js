@@ -1,4 +1,5 @@
 // Экспорт services-слоя
 module.exports = {
-  EmployeeService: require('./employeeService')
+  EmployeeService: require('./employeeService'),
+  AuthService: require('./authService')
 };

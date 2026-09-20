@@ -1,4 +1,5 @@
 // Экспорт schemas-слоя
 module.exports = {
-  employeeSchema: require('./employeeSchema')
+  employeeSchema: require('./employeeSchema'),
+  authSchema: require('./authSchema')
 };
