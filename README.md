@@ -1,16 +1,10 @@
-# Приложение оценки эффективности сотрудников — лабораторная работа №2
+# Приложение оценки эффективности сотрудников
 
 REST API для управления оценкой эффективности сотрудников (Employee Performance Evaluation).
 
 > 📖 **Всем AI-агентам и разработчикам:** все команды запуска хранятся в **`RUNBOOK.md`**.
 > Если вы выполняете какую-либо ручную команду (`npm ...`, `npx sequelize-cli ...`,
 > `node ...`, `curl ...`), вы **обязаны** дописать её в `RUNBOOK.md` с пояснением.
-
-## Цель работы
-
-Освоение подключения реляционной базы данных PostgreSQL к Node.js-приложению,
-использование ORM Sequelize для создания моделей и выполнения CRUD-операций,
-изучение миграций и связей между таблицами.
 
 ## Предметная область
 
@@ -24,15 +18,14 @@ REST API для управления оценкой эффективности �
 - **reviewDate** — дата проведения оценки (строка в формате YYYY-MM-DD)
 - **email** — электронная почта (необязательное поле, добавлено миграцией)
 
-Данные хранятся в базе данных **PostgreSQL** (облачная БД Supabase). Вместо массива
-в памяти (лабораторная работа №1) используется ORM **Sequelize**.
-
 ## Технологии
 
 - Node.js
 - Express.js
 - Sequelize (ORM)
-- PostgreSQL (Supabase)
+- PostgreSQL
+- JSON Web Token (jsonwebtoken)
+- bcrypt (хеширование паролей)
 - Nodemon (для разработки)
 
 ## Установка и настройка
@@ -43,7 +36,7 @@ REST API для управления оценкой эффективности �
 2. Запишите URL проекта (Project URL), например `https://<project-ref>.supabase.co`.
 3. В разделе **Project Settings → Database → Connection strings** выберите тип подключения:
 
-   - **Session pooler** (рекомендуется — работает по IPv4 с любых сетей):
+   - **Session pooler** (рекомендуется для этого приложения — работает по IPv4 с любых сетей):
      ```
      postgresql://postgres.<project-ref>:<PASSWORD>@aws-<index>-<region>.pooler.supabase.com:5432/postgres?sslmode=require
      ```
@@ -52,11 +45,12 @@ REST API для управления оценкой эффективности �
      postgresql://postgres:<PASSWORD>@db.<project-ref>.supabase.co:5432/postgres
      ```
 
+   > Хост pooler'а (`aws-<index>-<region>.pooler.supabase.com`) нельзя составить вручную — копируйте его из дашборда.
+
 ### 2. Установка зависимостей
 
 ```bash
 npm install
-npm install --save-dev sequelize-cli
 ```
 
 ### 3. Настройка переменных окружения
@@ -66,6 +60,8 @@ npm install --save-dev sequelize-cli
 ```
 DATABASE_URL=postgresql://postgres.<project-ref>:<PASSWORD>@aws-<index>-<region>.pooler.supabase.com:5432/postgres?sslmode=require
 ```
+
+Замените `<project-ref>`, `<PASSWORD>`, `<index>` и `<region>` на значения из дашборда Supabase.
 
 ### 4. Запуск миграций и сидов
 
@@ -120,11 +116,101 @@ npm start            # обычный запуск
 | 404 | Сотрудник с указанным ID не найден         |
 | 500 | Внутренняя ошибка сервера                  |
 
-## База данных (Sequelize)
+### Аутентификация: JWT + RBAC
 
-- Конфигурация подключения: `config/config.json` (указывает на `DATABASE_URL` из `.env`).
-- Модель: `models/employee.js` → таблица `Employees`.
-- Миграции:
-  - `create-employee` — создание таблицы `Employees`;
-  - `add-email-to-employees` — добавление колонки `email` (изменение схемы).
-- Сиды: `seeders/demo-employees` — стартовые данные (3 сотрудника).
+Помимо сотрудников (`Employee`) в приложении есть пользователи (`User`) с
+ролью **user** или **admin** (ролевая модель). Регистрация и вход работают на
+**JWT** (токен живёт 1 час) и **bcrypt** (хеширование паролей).
+
+| Метод  | Эндпоинт                        | Доступ            | Описание                                        |
+|--------|---------------------------------|-------------------|-------------------------------------------------|
+| POST   | `/api/v1/auth/register`         | все               | Регистрация (`email`, `password`) → 201         |
+| POST   | `/api/v1/auth/login`            | все               | Вход → `{ token, user }`                        |
+| GET    | `/api/v1/profile`               | авторизованные    | Данные текущего пользователя                    |
+| DELETE | `/api/v1/profile`               | авторизованные    | Удалить свою учётную запись                     |
+| GET    | `/api/v1/admin/users`           | admin             | Список всех пользователей                       |
+| GET    | `/api/v1/admin/users/:id`       | admin             | Пользователь по ID                             |
+| PATCH  | `/api/v1/admin/users/:id/role`  | admin             | Сменить роль (`user`/`admin`)                  |
+| DELETE | `/api/v1/admin/users/:id`       | admin             | Удалить пользователя                            |
+
+Авторизация: заголовок `Authorization: Bearer <token>`. Маршруты `/admin`
+дополнительно проверяют роль через middleware `isAdmin`.
+
+```bash
+# Регистрация
+curl -X POST http://localhost:3000/api/v1/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"user@example.com","password":"secret123"}'
+
+# Вход
+curl -X POST http://localhost:3000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@example.com","password":"Admin123!"}'
+```
+
+Демо-администратор создаётся сидом: `admin@example.com` / `Admin123!`.
+Секрет JWT хранится в `.env` (переменная `JWT_SECRET`).
+
+## Архитектура проекта
+
+Проект построен по слоистой архитектуре:
+
+```
+my-node-app/
+├── app/                        # HTTP-слой (маршруты)
+│   ├── api/
+│   │   ├── v1/
+│   │   │   ├── employees.js    # Маршруты сотрудников
+│   │   │   ├── auth.js         # Маршруты аутентификации (register, login)
+│   │   │   ├── profile.js      # Защищённые маршруты текущего пользователя
+│   │   │   ├── admin.js        # Маршруты администратора (RBAC)
+│   │   │   ├── router.js       # Объединение маршрутов v1
+│   │   │   └── index.js
+│   │   └── index.js
+│   └── index.js
+├── config/                     # Конфигурация Sequelize
+│   └── config.json
+├── core/                       # Ядро приложения
+│   ├── config.js               # Конфигурация (порт)
+│   ├── AppError.js             # Класс ошибок приложения
+│   ├── errorHandler.js         # Глобальный обработчик ошибок
+│   └── index.js
+├── middleware/                 # Middleware безопасности
+│   ├── auth.js                 # Проверка JWT (Authorization: Bearer <token>)
+│   └── isAdmin.js              # RBAC: доступ только для роли admin
+├── migrations/                 # Миграции базы данных
+├── models/                     # Модели данных (Sequelize)
+│   ├── employee.js             # Модель сотрудника
+│   ├── user.js                 # Модель пользователя (email, passwordHash, role)
+│   └── index.js
+├── repositories/               # Слой доступа к данным
+│   ├── employeeRepository.js   # Работа с данными сотрудников
+│   ├── userRepository.js       # Работа с данными пользователей
+│   └── index.js
+├── schemas/                    # Схемы валидации
+│   ├── employeeSchema.js       # Валидация данных сотрудника
+│   ├── authSchema.js           # Валидация аутентификации и ролей
+│   └── index.js
+├── seeders/                    # Сиды (тестовые данные)
+├── services/                   # Бизнес-логика
+│   ├── employeeService.js      # Сервис сотрудников
+│   ├── authService.js          # Сервис аутентификации (JWT + RBAC)
+│   └── index.js
+├── server.js                   # Точка входа
+├── .env                        # Переменные окружения (не в git)
+├── package.json
+└── README.md
+```
+
+### Слои и их ответственность
+
+| Слой | Ответственность |
+|------|-----------------|
+| `app/api/v1` | HTTP-маршруты, обработка запросов/ответов |
+| `services` | Бизнес-логика, валидация, вызовы репозитория |
+| `repositories` | Доступ к данным (Sequelize/PostgreSQL) |
+| `models` | Описание структуры данных (Sequelize) |
+| `migrations` | Управление схемой базы данных |
+| `seeders` | Наполнение базы тестовыми данными |
+| `schemas` | Валидация входных данных |
+| `core` | Конфигурация, ошибки, обработчики |

@@ -1,4 +1,5 @@
 // Экспорт repositories-слоя
 module.exports = {
-  EmployeeRepository: require('./employeeRepository')
+  EmployeeRepository: require('./employeeRepository'),
+  UserRepository: require('./userRepository')
 };

@@ -25,8 +25,9 @@
 8. [Создание новой модели / миграции / сида](#создание-новой-модели--миграции--сида)
 9. [Проверка соединения с БД](#проверка-соединения-с-бд)
 10. [Тестирование API (curl)](#тестирование-api-curl)
-11. [Известные нюансы](#известные-нюансы)
-12. [Сводная таблица команд](#сводная-таблица-команд)
+11. [Аутентификация: JWT + RBAC](#аутентификация-jwt--rbac)
+12. [Известные нюансы](#известные-нюансы)
+13. [Сводная таблица команд](#сводная-таблица-команд)
 
 ---
 
@@ -83,8 +84,17 @@ npm start          # обычный запуск
 DATABASE_URL=postgresql://postgres.<project-ref>:<PASSWORD>@aws-1-eu-west-1.pooler.supabase.com:5432/postgres?sslmode=require
 ```
 
-Этот файл автоматически подгружают и **приложение** (`models/index.js`
-вызывает `require('dotenv').config()`), и **sequelize-cli**.
+Этот файл автоматически подгружает **приложение** (`models/index.js`
+вызывает `require('dotenv').config()`).
+
+Для JWT-аутентификации в `.env` также должен быть секрет:
+
+```
+JWT_SECRET=<случайная строка, например результат `openssl rand -hex 32`>
+```
+
+> Если `JWT_SECRET` не задан, в коде используется dev-значение
+> (`dev-secret-change-me`) — только для разработки, в проде задавать обязательно!
 
 > Для БД Supabase хост pooler'а нужно брать из дашборда:
 > **Project Settings → Database → Connection strings → Session pooler**.
@@ -109,7 +119,13 @@ pkill -f 'node server.js'
 
 ## База данных: миграции
 
-Все команды Sequelize CLI выполняются из корня проекта, `.env` читается сам.
+Все команды Sequelize CLI выполняются из корня проекта.
+
+> ⚠️ sequelize-cli 6.6.5 **не подгружает** `.env` сам. Если `DATABASE_URL`
+> не задана в вашей оболочке, сначала выполните загрузку переменных:
+> `set -a; . ./.env; set +a` — затем команду миграции. Либо просто
+> выполните команды из шага «Установка и настройка» в README, где окружение
+> уже подгружено.
 
 ```bash
 # Применить все неприменённые миграции (создать/изменить таблицы)
@@ -259,7 +275,84 @@ curl -X DELETE http://localhost:3000/api/v1/employees/1
 ```
 
 Ожидаемые коды ответов: `200` ок, `201` создан, `400` невалидные данные,
-`404` не найден, `500` внутренняя ошибка.
+`401` нет/недействительный токен, `403` нет прав (RBAC), `404` не найден,
+`409` email уже занят, `500` внутренняя ошибка.
+
+---
+
+## Аутентификация: JWT + RBAC
+
+Лабораторная работа №3 — регистрация и вход по **JWT**, ролевая модель
+(поле `role`: `user` / `admin`, middleware `isAdmin`).
+
+### Зависимости
+
+```bash
+npm install jsonwebtoken bcrypt
+```
+
+### Модель, миграция и демо-администратор
+
+```bash
+# Сгенерировать модель + миграцию (затем добавить ограничения в models/user.js и миграции)
+npx sequelize-cli model:generate --name User --attributes email:string,passwordHash:string,role:string
+
+# Если sequelize-cli не видит DATABASE_URL, загрузить .env вручную:
+set -a; . ./.env; set +a
+
+npx sequelize-cli db:migrate     # создаёт таблицу Users
+npx sequelize-cli db:seed:all    # создаёт admin@example.com / Admin123!
+```
+
+Таблица `Users`: `id`, `email` (unique, NOT NULL), `passwordHash` (NOT NULL),
+`role` (по умолчанию `user`, значения `user`/`admin`).
+
+### Эндпоинты
+
+| Метод  | Эндпоинт                        | Доступ            | Описание                                        |
+|--------|---------------------------------|-------------------|-------------------------------------------------|
+| POST   | `/api/v1/auth/register`         | все               | регистрация `email` + `password` → 201          |
+| POST   | `/api/v1/auth/login`            | все               | вход → `{ token, user }`, JWT живёт 1 час       |
+| GET    | `/api/v1/profile`               | авторизованные    | данные текущего пользователя                    |
+| DELETE | `/api/v1/profile`               | авторизованные    | удалить свою учётную запись                     |
+| GET    | `/api/v1/admin/users`           | admin             | список всех пользователей                       |
+| GET    | `/api/v1/admin/users/:id`       | admin             | пользователь по ID                             |
+| PATCH  | `/api/v1/admin/users/:id/role`  | admin             | сменить роль (`user`/`admin`)                  |
+| DELETE | `/api/v1/admin/users/:id`       | admin             | удалить пользователя                            |
+
+### Проверка (curl)
+
+```bash
+# Регистрация
+curl -X POST http://localhost:3000/api/v1/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"user@example.com","password":"secret123"}'
+
+# Вход (из ответа запомнить поле "token")
+curl -X POST http://localhost:3000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@example.com","password":"Admin123!"}'
+
+# Профиль текущего пользователя
+curl http://localhost:3000/api/v1/profile \
+  -H 'Authorization: Bearer <TOKEN>'
+
+# Админ-список пользователей
+curl http://localhost:3000/api/v1/admin/users \
+  -H 'Authorization: Bearer <ADMIN_TOKEN>'
+
+# Сменить роль пользователя (RBAC)
+curl -X PATCH http://localhost:3000/api/v1/admin/users/2/role \
+  -H 'Authorization: Bearer <ADMIN_TOKEN>' \
+  -H 'Content-Type: application/json' \
+  -d '{"role":"admin"}'
+```
+
+### Нюансы
+
+- В JWT лежит `{ id, email, role }` — смена роли действует **после повторного входа**.
+- Через регистрацию создаётся только роль `user`; админа назначает другой админ.
+- Секрет подписи — `JWT_SECRET` в `.env`; без него используется dev-значение.
 
 ---
 
@@ -295,6 +388,9 @@ curl -X DELETE http://localhost:3000/api/v1/employees/1
 | `npx sequelize-cli migration:generate --name xxx` | Создать пустую миграцию |
 | `npx sequelize-cli seed:generate --name xxx` | Создать пустой сид |
 | `pkill -f 'node server.js'` | Остановить фоновый сервер |
+| `npm install jsonwebtoken bcrypt` | Установить зависимости JWT и bcrypt |
+| `npx sequelize-cli model:generate --name User --attributes ...` | Создать модель User + миграцию |
+| `curl http://localhost:3000/api/v1/auth/register` | Проверить регистрацию (см. раздел «Аутентификация») |
 | `curl http://localhost:3000/api/v1/employees` | Проверить API (GET список) |
 | `npm run check` | Автопроверка задач лаб. работы №2 (selfcheck) |
 
