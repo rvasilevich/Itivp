@@ -28,6 +28,10 @@ const employeeSchema = {
       errors.push('Поле "reviewDate" обязательно и должно быть строкой в формате YYYY-MM-DD');
     }
 
+    if (data.email !== undefined && (typeof data.email !== 'string' || data.email.trim() === '' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email))) {
+      errors.push('Поле "email" должно быть строкой в формате email');
+    }
+
     return errors;
   },
 
