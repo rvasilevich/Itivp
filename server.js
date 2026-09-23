@@ -8,6 +8,19 @@ const { api } = require('./app');
 
 const app = express();
 
+// Нормализация URL: Postman/коллекции часто склеивают базовый URL и путь,
+// получая двойной слэш — http://localhost:3000//api/v1/auth/register.
+// Express такой путь не сопоставляет с маршрутом (404), поэтому сводим
+// повторяющиеся слэши к одному до подключения маршрутов.
+app.use((req, res, next) => {
+  if (req.url.includes('//')) {
+    req.url = req.url.replace(/\/{2,}/g, '/');
+    req.originalUrl = req.url;
+  }
+
+  next();
+});
+
 // Middleware для парсинга JSON
 app.use(express.json());
 
