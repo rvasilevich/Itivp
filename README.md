@@ -45,12 +45,19 @@ REST API для управления оценкой эффективности �
 
    - **Session pooler** (рекомендуется — работает по IPv4 с любых сетей):
      ```
-     postgresql://postgres.<project-ref>:<PASSWORD>@aws-<index>-<region>.pooler.supabase.com:5432/postgres?sslmode=require
+     postgresql://postgres.<project-ref>:<PASSWORD>@aws-<index>-<region>.pooler.supabase.com:5432/postgres?sslmode=no-verify
      ```
    - **Direct connection** (только если сеть поддерживает IPv6 или подключён IPv4 add-on):
      ```
      postgresql://postgres:<PASSWORD>@db.<project-ref>.supabase.co:5432/postgres
      ```
+
+   > ⚠️ **Почему `sslmode=no-verify`, а не `sslmode=require`?** Начиная с `pg@8.16`
+   > (через `pg-connection-string@2.9`) режимы `require` / `prefer` трактуются как
+   > `verify-full`, и подключение к pooler'у Supabase падает с
+   > `self-signed certificate in certificate chain`. Режим `no-verify` включает
+   > TLS-шифрование, но не проверяет цепочку сертификатов — это рабочий вариант
+   > для Supabase pooler без установки CA-сертификата.
 
 ### 2. Установка зависимостей
 
@@ -64,14 +71,26 @@ npm install --save-dev sequelize-cli
 Создайте файл `.env` в корне проекта:
 
 ```
-DATABASE_URL=postgresql://postgres.<project-ref>:<PASSWORD>@aws-<index>-<region>.pooler.supabase.com:5432/postgres?sslmode=require
+DATABASE_URL=postgresql://postgres.<project-ref>:<PASSWORD>@aws-<index>-<region>.pooler.supabase.com:5432/postgres?sslmode=no-verify
+JWT_SECRET=<произвольная_строка>
 ```
+
+> Файл `.env` в `.gitignore` и не коммитится. Приложение читает его через
+> `require('dotenv').config()` в `models/index.js`, а **sequelize-cli — через
+> `.sequelizerc`** (CLI сам `.env` не подгружает).
 
 ### 4. Запуск миграций и сидов
 
 ```bash
-npx sequelize-cli db:migrate
-npx sequelize-cli db:seed:all
+npx sequelize-cli db:migrate       # применить миграции (создать таблицу Employees)
+npx sequelize-cli db:seed:all      # наполнить базу тестовыми данными (3 сотрудника)
+```
+
+Проверить, что всё настроено правильно (подключение, таблица, модель, CRUD,
+миграция изменения схемы, сиды) можно одной командой:
+
+```bash
+npm run check                      # полная автопроверка лабораторной работы №2
 ```
 
 ### 5. Запуск приложения
@@ -122,9 +141,24 @@ npm start            # обычный запуск
 
 ## База данных (Sequelize)
 
-- Конфигурация подключения: `config/config.json` (указывает на `DATABASE_URL` из `.env`).
+- Конфигурация подключения: `config/config.json` (указывает на `DATABASE_URL` из `.env`)
+  и `.sequelizerc` (загружает `.env` для sequelize-cli и задаёт пути к config/models/migrations/seeders).
 - Модель: `models/employee.js` → таблица `Employees`.
 - Миграции:
   - `create-employee` — создание таблицы `Employees`;
   - `add-email-to-employees` — добавление колонки `email` (изменение схемы).
 - Сиды: `seeders/demo-employees` — стартовые данные (3 сотрудника).
+- Репозиторий (CRUD через Sequelize): `repositories/employeeRepository.js`
+  (`Employee.findAll` / `findByPk` / `create` / `save` / `destroy`).
+- Автопроверка всех задач лабораторной работы: `scripts/selfcheck.js` (`npm run check`).
+
+## Тестирование через Postman
+
+Postman → **New Request**, метод и адрес — из таблицы выше. Для `POST` и `PUT`:
+
+- вкладка **Body** → **raw** → тип **JSON** (не Text!);
+- в поле ввода — JSON из примера выше;
+- заголовок `Content-Type: application/json` Postman ставит сам при выборе JSON.
+
+Postman обращается только к HTTP API приложения (`http://localhost:3000`),
+поэтому о подключении к облачной БД (`sslmode=no-verify`) думать не нужно.
