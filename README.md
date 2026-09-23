@@ -24,8 +24,8 @@ REST API для управления оценкой эффективности �
 
 - Node.js
 - Express.js (в т.ч. middleware `cors` — CORS для фронтенда)
-- Sequelize (ORM)
-- PostgreSQL
+- Sequelize (ORM) + PostgreSQL
+- Mongoose (ODM) + MongoDB — документное хранилище с вложенными структурами
 - JSON Web Token (jsonwebtoken)
 - bcrypt (хеширование паролей)
 - Nodemon (для разработки)
@@ -87,6 +87,58 @@ npm run dev        # http://localhost:5173 (сервер должен работ
 npm run test       # Vitest: 27 тестов (API замокан)
 ```
 
+## MongoDB (Mongoose): документное хранилище
+
+Тот же предметный вид (сотрудники и оценки эффективности) дополнительно хранится
+в MongoDB — для демонстрации отличий документной модели от реляционной.
+
+- **подключение:** `mongoose.connect(MONGO_URI)` в `server.js`; строка подключения
+  — `MONGO_URI` в `.env` (например, `mongodb://127.0.0.1:27017/employee_eval`
+  или Atlas `mongodb+srv://…`);
+- **схема/модель:** `mongo/models/employee.js`, коллекция `employees_mongo` —
+  поля сотрудника + **вложенные массивы**: `reviews[]` (история оценок, внутри —
+  ещё массив целей `goals[]`) и `skills[]` (навык + уровень);
+- **маршруты:** `/api/v1/mongo/employees` — CRUD методами Mongoose
+  (`find / findById / create / findByIdAndUpdate / findByIdAndDelete`) +
+  вложенные операции `$push`, `$`, `$pull`, `$addToSet`, `$inc`;
+- **команды:** `npm run seed:mongo` (демо-документ), `npm run check:mongo`
+  (12 проверок), справочник маршрутов — `GET /api/v1`.
+
+Пример документа из коллекции `employees_mongo`:
+
+```json
+{
+  "name": "Иван Иванов",
+  "position": "Разработчик",
+  "department": "IT",
+  "rating": 8.5,
+  "skills": [
+    { "name": "JavaScript", "level": 9 },
+    { "name": "SQL", "level": 7 }
+  ],
+  "reviews": [
+    {
+      "date": "2026-09-01",
+      "reviewer": "Алексей Сидоров (лид команды)",
+      "rating": 9,
+      "comment": "Успешно закрыл миграцию сервиса без даунтайма.",
+      "goals": ["Снизить время сборки"]
+    }
+  ]
+}
+```
+
+**Реляционная модель (PostgreSQL) vs документная (MongoDB):**
+
+| PostgreSQL (Sequelize) | MongoDB (Mongoose) |
+|------------------------|--------------------|
+| оценки — отдельная таблица + внешний ключ на `Employees` | история оценок **внутри** документа: `reviews[]` |
+| навыки — таблица `Skills` (+ связывающая таблица) | `skills[]` — массив вложенных документов |
+| чтение истории = `JOIN` / подзапросы | документ читается целиком одним `find()` |
+| добавить отзыв = `INSERT` в другую таблицу | `POST .../reviews` → `$push` по массиву |
+| изменить уровень навыка = `UPDATE` по id строки | `PATCH .../skills/:name` → `$inc` + позиционный `$` |
+| правки структуры = миграции (`sequelize-cli`) | схема гибкая, документ самодокументирован |
+
 ## Установка и настройка
 
 ### 1. Создание проекта в Supabase (облачная БД)
@@ -126,6 +178,7 @@ npm install
 ```
 DATABASE_URL=postgresql://postgres.<project-ref>:<PASSWORD>@aws-<index>-<region>.pooler.supabase.com:5432/postgres?sslmode=no-verify
 JWT_SECRET=<произвольная_строка>
+MONGO_URI=mongodb://127.0.0.1:27017/employee_eval
 ```
 
 Замените `<project-ref>`, `<PASSWORD>`, `<index>` и `<region>` на значения из дашборда Supabase.
@@ -284,6 +337,9 @@ my-node-app/
 ├── middleware/                 # Middleware безопасности
 │   ├── auth.js                 # Проверка JWT (Authorization: Bearer <token>)
 │   └── isAdmin.js              # RBAC: доступ только для роли admin
+├── mongo/                      # Mongoose (MongoDB): документное хранилище
+│   ├── models/employee.js      # Схема: вложенные reviews[] и skills[]
+│   └── routes/employees.js     # CRUD + $push / $ / $pull / $addToSet / $inc
 ├── migrations/                 # Миграции базы данных
 ├── models/                     # Модели данных (Sequelize)
 │   ├── employee.js             # Модель сотрудника

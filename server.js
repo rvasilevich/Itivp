@@ -4,8 +4,10 @@ require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
+const mongoose = require('mongoose');
 const { config, errorHandler } = require('./core');
 const { api } = require('./app');
+const mongoEmployeesRouter = require('./mongo/routes/employees');
 
 const app = express();
 
@@ -27,6 +29,16 @@ app.use((req, res, next) => {
 
 // Middleware для парсинга JSON
 app.use(express.json());
+
+// Подключение к MongoDB (Mongoose): MONGO_URI из .env, fallback — локальная установка
+mongoose
+  .connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/employee_eval')
+  .then(() => console.log('MongoDB connected'))
+  .catch((err) => console.error('MongoDB connection error:', err.message));
+
+// Маршруты MongoDB: документные сотрудники с вложенными структурами
+// (в реляционной части приложения — Sequelize/PostgreSQL, здесь — Mongoose)
+app.use('/api/v1/mongo/employees', mongoEmployeesRouter);
 
 // Подключение маршрутов API v1
 app.use('/api/v1', api.v1.router);

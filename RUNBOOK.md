@@ -28,8 +28,9 @@
 11. [Тестирование API (curl)](#тестирование-api-curl)
 12. [Аутентификация: JWT + RBAC](#аутентификация-jwt--rbac)
 13. [Фронтенд (my-app, Vite + React)](#фронтенд-my-app-vite--react)
-14. [Известные нюансы](#известные-нюансы)
-15. [Сводная таблица команд](#сводная-таблица-команд)
+14. [MongoDB (Mongoose)](#mongodb-mongoose)
+15. [Известные нюансы](#известные-нюансы)
+16. [Сводная таблица команд](#сводная-таблица-команд)
 
 ---
 
@@ -37,6 +38,7 @@
 
 - **Стек:** Node.js + Express + Sequelize (ORM) + PostgreSQL (облачная БД **Supabase**).
 - **Фронтенд:** `my-app/` — Vite + React (ЛР №4–№5: локальный список → интеграция с REST API через axios), см. раздел [Фронтенд (my-app, Vite + React)](#фронтенд-my-app-vite--react).
+- **MongoDB (Mongoose):** документное хранилище с вложенными структурами (маршруты `/api/v1/mongo/employees`), см. раздел [MongoDB (Mongoose)](#mongodb-mongoose).
 - **Точка входа:** `server.js` → порт `3000`.
 - **Слои:** `app/api/v1` (маршруты) → `services` (бизнес-логика) →
   `repositories` (Sequelize) → `models` (модели), `migrations`/`seeders` (схема и данные).
@@ -564,6 +566,76 @@ npm run lint
 
 ---
 
+## MongoDB (Mongoose)
+
+Лаб. работа по документным БД: Mongoose подключён к существующему Express-приложению
+(`server.js` → `mongoose.connect(MONGO_URI)`), маршруты — `/api/v1/mongo/employees`.
+
+**Подключение.** Строка подключения — `MONGO_URI` в `.env`:
+
+```
+MONGO_URI=mongodb://127.0.0.1:27017/employee_eval   # локальная установка
+# или Atlas (бесплатный M0): mongodb+srv://user:pass@cluster0.xxxxx.mongodb.net/employee_eval
+```
+
+Альтернативы: кластер **MongoDB Atlas** (в Atlas → Network Access добавить свой IP,
+в Database Access — пользователя БД) или **локальный mongod**:
+
+```bash
+# локальный запуск (пример; бинарник — с fastdl.mongodb.org или brew)
+mongod --dbpath ~/mongodb-data --port 27017 --bind_ip 127.0.0.1 \
+  --fork --logpath /tmp/mongod.log
+```
+
+**Структура кода:**
+
+- `mongo/models/employee.js` — схема и модель `Employee` (коллекция `employees_mongo`):
+  поля сотрудника + **вложенные документы** `reviews[]` (история оценок: date,
+  reviewer, rating, comment и массив целей `goals[]`) и `skills[]` (навык + уровень);
+- `mongo/routes/employees.js` — CRUD методами Mongoose + вложенные операции:
+  `$push` (новый отзыв), позиционный оператор `$` (правка конкретного
+  отзыва/навыка внутри массива), `$pull` (удаление отзыва), `$addToSet`
+  (добавить навык), `$inc` (увеличить уровень навыка — аналог «корзины»).
+
+| Маршрут | Что делает |
+|---------|-----------|
+| `GET /api/v1/mongo/employees` | список (`find`), `?search=` — `$regex` без учёта регистра |
+| `GET /api/v1/mongo/employees/:id` | сотрудник (`findById`) |
+| `POST /api/v1/mongo/employees` | создать документ, в т.ч. со `skills[]`/`reviews[]` (`create`) |
+| `PUT /api/v1/mongo/employees/:id` | обновить документ (`findByIdAndUpdate`) |
+| `DELETE /api/v1/mongo/employees/:id` | удалить документ (`findByIdAndDelete`) |
+| `POST .../:id/reviews` | добавить вложенный отзыв (`$push`) |
+| `PUT .../:id/reviews/:reviewId` | изменить элемент массива (позиционный `$`) |
+| `DELETE .../:id/reviews/:reviewId` | удалить отзыв (`$pull`) |
+| `POST .../:id/skills` | добавить навык (`$addToSet`), дубль → 409 |
+| `PATCH .../:id/skills/:name` | увеличить уровень навыка (`$inc` + `$`) |
+
+**Команды:**
+
+```bash
+npm install mongoose      # ODM-зависимость
+npm run seed:mongo        # демо-документ со вложенными структурами (для Compass)
+npm run check:mongo       # 12 проверок: CRUD + вложенные операции (сервер запущен)
+npm run dev               # сервер: в логе должно быть «MongoDB connected»
+```
+
+Посмотреть вложенную структуру: MongoDB Compass → база `employee_eval` →
+коллекция `employees_mongo` (или JSON-вывод `npm run seed:mongo` / `npm run check:mongo`).
+
+### Нюансы MongoDB
+
+1. Mongoose-файлы лежат в `mongo/`, а **не** в `models/` — `models/` занят
+   Sequelize (`models/index.js` подгружает оттуда все `.js` как фабрики моделей).
+2. Если mongod не запущен — `npm run dev` поднимется (PostgreSQL-API работает),
+   а `/api/v1/mongo/*` вернёт 500/таймаут: сначала запустить mongod,
+   затем перезапустить сервер.
+3. Ошибки Mongoose (`CastError` → 400, `ValidationError` → 400, дубль `11000` → 409)
+   маппятся в `AppError` хелпером `toAppError` в `mongo/routes/employees.js`.
+4. Коллекция названа `employees_mongo`, чтобы не путать с таблицей
+   `"Employees"` PostgreSQL.
+
+---
+
 ## Известные нюансы
 
 1. **Прямой хост `db.<ref>.supabase.co` недоступен с IPv4** — проект сидит за
@@ -629,5 +701,12 @@ npm run lint
 | `cd my-app && npm install axios` | Установить axios — HTTP-клиент фронтенда (ЛР №5) |
 | `curl --get http://localhost:3000/api/v1/employees --data-urlencode 'search=...'` | Проверить серверный поиск `?search=` (ЛР №5) |
 | `curl -X PUT http://localhost:3000/api/v1/profile -H 'Authorization: Bearer <TOKEN>' -d '{"email":"..."}'` | Обновить свои данные в БД (PUT /profile) |
+| `npm install mongoose` | Установить ODM Mongoose (MongoDB, документные БД) |
+| `npm run seed:mongo` | Демо-документ в MongoDB со вложенными структурами |
+| `npm run check:mongo` | Самопроверка MongoDB-лабораторной (12 проверок) |
+| `mongod --dbpath ~/mongodb-data --port 27017 --bind_ip 127.0.0.1 --fork --logpath /tmp/mongod.log` | Запустить локальный MongoDB |
+| `curl http://localhost:3000/api/v1/mongo/employees` | Список документов MongoDB |
+| `curl -X POST http://localhost:3000/api/v1/mongo/employees/:id/reviews -H 'Content-Type: application/json' -d '{"reviewer":"...","rating":9}'` | Добавить вложенный отзыв ($push) |
+| `curl -X PATCH http://localhost:3000/api/v1/mongo/employees/:id/skills/SQL -H 'Content-Type: application/json' -d '{"amount":1}'` | Увеличить уровень навыка ($inc + $) |
 
 > **Новые ручные команды дописывать в эту таблицу и в соответствующий раздел!**
