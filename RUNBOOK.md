@@ -252,6 +252,40 @@ const { Sequelize } = require('sequelize');
 
 ---
 
+## Подключение к БД из DBeaver (просмотр структуры/данных)
+
+Параметры подключения (New Database Connection → PostgreSQL → Main):
+
+| Поле | Значение |
+|------|----------|
+| Connect by | `Host` |
+| Host | `aws-1-eu-west-1.pooler.supabase.com` |
+| Port | `5432` |
+| Database | `postgres` |
+| Authentication | `Username/password` |
+| Username | `postgres.duiefqyrzmbpqtigfdmr` |
+| Password | из `.env` (часть строки `DATABASE_URL` между `postgres.<ref>:` и `@`) |
+
+Нюансы:
+
+1. **Username обязательно с project-ref** (`postgres.duiefqyrzmbpqtigfdmr`). Если
+   указать просто `postgres`, pooler отвечает
+   `FATAL: (ENOIDENTIFIER) no tenant identifier provided (external_id or sni_hostname required)` —
+   по логину pooler понимает, в какой проект направлять соединение.
+   Проверено: `postgres` не пускает и без SSL, и с SSL; `postgres.<ref>` пускает в обоих случаях.
+2. **SSL**: в DBeaver (JDBC) `sslmode=no-verify` не поддерживается — это расширение
+   node-postgres. В окне подключения: кнопка «SSH, SSL, …» → **Use SSL**, либо на
+   вкладке **Driver properties** добавить `sslmode=require` (в JDBC `require` =
+   «шифровать, сертификат не проверять»; сертификат pooler'а выпущен внутренним CA
+   `Supabase Intermediate 2021 CA`, поэтому `verify-ca`/`verify-full` не подойдут).
+3. Что смотреть для отчёта: `Schemas → public → Tables` (`Employees`, `SequelizeMeta`),
+   **Columns** таблицы `Employees` (последняя колонка `email` — её добавила миграция),
+   **Constraints** (`Employees_pkey`), **Data** (3 строки из сида), и
+   ПКМ по таблице → **Generate SQL → DDL** (итоговый `CREATE TABLE`).
+4. Альтернатива без установки клиента — Supabase Dashboard → **Table Editor**.
+
+---
+
 ## Тестирование API (curl)
 
 Сначала запустить сервер (`npm run dev`), затем:
