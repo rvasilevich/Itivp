@@ -61,6 +61,21 @@ REST API для управления оценкой эффективности �
 - `useEffect [employees.length]` — обновление `document.title`;
 - клиентская фильтрация по отделу и сортировка (ЛР №4) сохранены.
 
+**Аутентификация и роли (первая страница — вход/регистрация):**
+
+- `src/components/AuthPage.jsx` — вход (`POST /auth/login`) и регистрация
+  (`POST /auth/register`, затем автоматический вход); JWT и пользователь
+  сохраняются в `localStorage` (ключи `token`/`user`, см. `src/session.js`);
+- `src/App.jsx` — проверка токена при старте (`GET /profile`, отмена запроса
+  через `AbortController`) и разводка **по роли**:
+  - **admin** — вкладки «Сотрудники» (полный CRUD — функционал не изменился)
+    и «Профиль»;
+  - **user** — только своя страница профиля (без доступа к списку сотрудников);
+- `src/components/Profile.jsx` — загрузка данных (`GET /profile`, состояния
+  «загрузка / ошибка» + «Повторить») и редактирование email/пароля через
+  **`PUT /api/v1/profile`** с сохранением в БД; 401 (просрочен токен) →
+  автоматический разлогин.
+
 Настройка и запуск (подробности — в `RUNBOOK.md`, раздел «Фронтенд»):
 
 ```bash
@@ -69,7 +84,7 @@ REST API для управления оценкой эффективности �
 cd my-app
 npm install        # зависимости, в т.ч. axios
 npm run dev        # http://localhost:5173 (сервер должен работать на :3000)
-npm run test       # Vitest: 12 тестов (API замокан)
+npm run test       # Vitest: 27 тестов (API замокан)
 ```
 
 ## Установка и настройка
@@ -151,7 +166,7 @@ npm install                 # установить зависимости (в т
 # создайте my-app/.env (см. .env.example):
 #   VITE_API_URL=http://localhost:3000/api/v1
 npm run dev                 # Vite dev-сервер на http://localhost:5173
-npm run test                # vitest — 12 тестов (мок API)
+npm run test                # vitest — 27 тестов (мок API)
 npm run lint                # oxlint — 0 warnings
 npm run build               # production-сборка в my-app/dist
 ```
@@ -299,11 +314,17 @@ my-node-app/
 my-app/
 ├── .env                        # VITE_API_URL (не в git), шаблон — .env.example
 ├── src/
-│   ├── api.js                  # axios-клиент REST API (JWT-перехватчик, CRUD-функции)
-│   ├── App.jsx
+│   ├── api.js                  # axios-клиент (JWT-перехватчик, CRUD + auth/profile)
+│   ├── session.js              # сессия в localStorage (token, user)
+│   ├── App.jsx                 # вход → проверка токена → вкладки по роли
+│   ├── App.test.jsx            # тесты ролей (admin/user, logout, 401)
 │   ├── components/
+│   │   ├── AuthPage.jsx        # вход / регистрация (первая страница)
+│   │   ├── AuthPage.test.jsx
 │   │   ├── EmployeeList.jsx    # список: GET/POST/PUT/DELETE, loading/error, поиск
-│   │   └── EmployeeList.test.jsx  # vitest-тесты с моком api (12 шт.)
+│   │   ├── EmployeeList.test.jsx
+│   │   ├── Profile.jsx         # профиль: GET/PUT /profile (сохранение в БД)
+│   │   └── Profile.test.jsx
 │   └── data/demoEmployees.js   # эталонная структура объекта Employee
 └── vite.config.js
 ```

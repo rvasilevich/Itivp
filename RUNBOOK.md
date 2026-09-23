@@ -385,6 +385,7 @@ npx sequelize-cli db:seed:all    # создаёт admin@example.com / Admin123!
 | POST   | `/api/v1/auth/register`         | все               | `{"email":"...","password":"..."}`         | регистрация `email` + `password` → 201          |
 | POST   | `/api/v1/auth/login`            | все               | `{"email":"...","password":"..."}`         | вход → `{ token, user }`, JWT живёт 1 час       |
 | GET    | `/api/v1/profile`               | авторизованные    | —                                          | данные текущего пользователя                    |
+| PUT    | `/api/v1/profile`               | авторизованные    | `{"email":"..."}` и/или `{"password":"..."}` | обновить свои данные **с сохранением в БД**     |
 | DELETE | `/api/v1/profile`               | авторизованные    | —                                          | удалить свою учётную запись                     |
 | GET    | `/api/v1/admin/users`           | admin             | —                                          | список всех пользователей                       |
 | GET    | `/api/v1/admin/users/:id`       | admin             | —                                          | пользователь по ID                             |
@@ -412,6 +413,12 @@ curl -X POST http://localhost:3000/api/v1/auth/login \
 # Профиль текущего пользователя
 curl http://localhost:3000/api/v1/profile \
   -H 'Authorization: Bearer <TOKEN>'
+
+# Обновить свои данные (email и/или пароль) — сохраняется в БД
+curl -X PUT http://localhost:3000/api/v1/profile \
+  -H 'Authorization: Bearer <TOKEN>' \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"new.email@example.com","password":"newsecret12"}'
 
 # Админ-список пользователей
 curl http://localhost:3000/api/v1/admin/users \
@@ -510,6 +517,20 @@ curl -X PATCH http://localhost:3000/api/v1/admin/users/2/role \
   отменой устаревших запросов через `AbortController` (при размонтировании тоже);
 - `useEffect [employees.length]` — обновление `document.title`.
 
+**Аутентификация и роли (экран входа первым):**
+
+- `src/components/AuthPage.jsx` — первая страница: вход и регистрация
+  (`POST /auth/register`, `POST /auth/login`); токен и пользователь
+  сохраняются в `localStorage` (`src/session.js`, ключи `token`/`user`);
+- `src/App.jsx` — при наличии токена проверяет его (`GET /profile`, отмена
+  через `AbortController`) и открывает функционал **по роли**:
+  - **admin** — вкладки «Сотрудники» (полный CRUD, функционал не изменился)
+    и «Профиль»;
+  - **user** — только страница профиля со своими данными;
+- `src/components/Profile.jsx` — `GET /profile` (загрузка/ошибка/«Повторить»)
+  и форма редактирования email/пароля через **`PUT /profile`** с сохранением
+  в БД; ошибка 401 (просрочен токен) → автоматический разлогин.
+
 ### Настройка и запуск
 
 Сначала поднимите сервер (раздел «Сервер»), затем — клиент.
@@ -527,7 +548,7 @@ npm install
 # 3. Запуск dev-сервера Vite на :5173 (http://localhost:5173)
 npm run dev
 
-# 4. Юнит-тесты (Vitest + Testing Library, 12 проверок, API замокан)
+# 4. Юнит-тесты (Vitest + Testing Library, 27 проверок, API замокан)
 npm run test
 
 # 5. Production-сборка в my-app/dist/ (каталог в .gitignore, не коммитится)
@@ -537,7 +558,7 @@ npm run build
 npm run lint
 ```
 
-Проверка после изменений: `npm run test` → `Tests 12 passed (12)`,
+Проверка после изменений: `npm run test` → `Tests 27 passed (27)`,
 затем `npm run dev` и открыть <http://localhost:5173> (сервер на :3000 должен
 работать — данные приходят с REST API, CORS включён в `server.js`).
 
@@ -601,11 +622,12 @@ npm run lint
 | `npm run check` | Автопроверка задач лаб. работы №2 (selfcheck) |
 | `cd my-app && npm install` | Установить зависимости фронтенда (React/Vite/Vitest) |
 | `cd my-app && npm run dev` | Запуск Vite dev-сервера клиента на :5173 |
-| `cd my-app && npm run test` | Юнит-тесты компонента EmployeeList (Vitest, 12 шт., мок API) |
+| `cd my-app && npm run test` | Юнит-тесты фронтенда (Vitest, 27 шт., мок API) |
 | `cd my-app && npm run build` | Production-сборка клиента в `my-app/dist/` |
 | `cd my-app && npm run lint` | Линтер фронтенда (oxlint) |
 | `npm install cors` | Добавить CORS middleware (нужен Client → API, ЛР №5) |
 | `cd my-app && npm install axios` | Установить axios — HTTP-клиент фронтенда (ЛР №5) |
 | `curl --get http://localhost:3000/api/v1/employees --data-urlencode 'search=...'` | Проверить серверный поиск `?search=` (ЛР №5) |
+| `curl -X PUT http://localhost:3000/api/v1/profile -H 'Authorization: Bearer <TOKEN>' -d '{"email":"..."}'` | Обновить свои данные в БД (PUT /profile) |
 
 > **Новые ручные команды дописывать в эту таблицу и в соответствующий раздел!**

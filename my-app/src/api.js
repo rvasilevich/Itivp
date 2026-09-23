@@ -46,8 +46,11 @@ function toError(error) {
     message = error.message;
   }
 
+  // Нормализованная ошибка: message — человекочитаемый текст, status — HTTP-код
+  // (undefined, если ответа не было) — нужен для обработки 401 (просроченный токен).
   const normalized = new Error(message);
   normalized.isCanceled = false;
+  normalized.status = error.response ? error.response.status : undefined;
   return normalized;
 }
 
@@ -79,5 +82,23 @@ export const updateEmployee = (id, employee) =>
 // DELETE /employees/:id — удалить сотрудника
 export const deleteEmployee = (id) =>
   request(api.delete(`/employees/${id}`));
+
+// ---------- API-функции аутентификации и профиля ----------
+
+// POST /auth/register — регистрация (роль всегда 'user') → { id, email, role }
+export const registerUser = (data) =>
+  request(api.post('/auth/register', data));
+
+// POST /auth/login — вход → { token, user }
+export const loginUser = (data) =>
+  request(api.post('/auth/login', data));
+
+// GET /profile — данные текущего пользователя (требует JWT; signal — для отмены)
+export const fetchProfile = ({ signal } = {}) =>
+  request(api.get('/profile', { signal }));
+
+// PUT /profile — обновить свои данные (email и/или пароль) с сохранением в БД
+export const updateProfile = (data) =>
+  request(api.put('/profile', data));
 
 export default api;

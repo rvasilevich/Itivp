@@ -19,6 +19,7 @@ const API_INDEX = [
   { method: 'POST', path: '/api/v1/auth/register', access: 'все', description: 'Регистрация (email, password) → 201' },
   { method: 'POST', path: '/api/v1/auth/login', access: 'все', description: 'Вход → { token, user }' },
   { method: 'GET', path: '/api/v1/profile', access: 'авторизованные', description: 'Данные текущего пользователя' },
+  { method: 'PUT', path: '/api/v1/profile', access: 'авторизованные', description: 'Обновить свои данные (email/пароль) с сохранением в БД' },
   { method: 'DELETE', path: '/api/v1/profile', access: 'авторизованные', description: 'Удалить свою учётную запись' },
   { method: 'GET', path: '/api/v1/admin/users', access: 'admin', description: 'Список всех пользователей (RBAC)' },
   { method: 'GET', path: '/api/v1/admin/users/:id', access: 'admin', description: 'Пользователь по ID (RBAC)' },

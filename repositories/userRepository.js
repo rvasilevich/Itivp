@@ -41,6 +41,26 @@ class UserRepository {
     return user;
   }
 
+  // Обновить данные профиля (email и/или пароль) с сохранением в БД
+  async updateProfile(id, data) {
+    const user = await User.findByPk(id);
+
+    if (!user) {
+      return null;
+    }
+
+    if (data.email !== undefined) {
+      user.email = data.email;
+    }
+
+    if (data.passwordHash !== undefined) {
+      user.passwordHash = data.passwordHash;
+    }
+
+    await user.save();
+    return user;
+  }
+
   // Удалить пользователя
   async delete(id) {
     const user = await User.findByPk(id);

@@ -14,6 +14,12 @@ router.get('/', async (req, res) => {
   res.json(profile);
 });
 
+// PUT /api/v1/profile — обновление своих данных (email и/или пароль) с сохранением в БД
+router.put('/', async (req, res) => {
+  const profile = await authService.updateProfile(req.user.id, req.body);
+  res.json(profile);
+});
+
 // DELETE /api/v1/profile — удаление собственной учётной записи
 router.delete('/', async (req, res) => {
   const deleted = await authService.deleteUser(req.user.id);
