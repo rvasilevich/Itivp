@@ -1,3 +1,7 @@
+// Загружаем переменные окружения (.env) до подключения моделей и middleware,
+// чтобы JWT_SECRET и DATABASE_URL были доступны на этапе require().
+require('dotenv').config();
+
 const express = require('express');
 const { config, errorHandler } = require('./core');
 const { api } = require('./app');

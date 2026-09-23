@@ -81,11 +81,15 @@ npm start          # обычный запуск
 Пример актуальной строки подключения (pooler session mode):
 
 ```
-DATABASE_URL=postgresql://postgres.<project-ref>:<PASSWORD>@aws-1-eu-west-1.pooler.supabase.com:5432/postgres?sslmode=require
+DATABASE_URL=postgresql://postgres.<project-ref>:<PASSWORD>@aws-1-eu-west-1.pooler.supabase.com:5432/postgres?sslmode=no-verify
+JWT_SECRET=<случайная строка, например результат `openssl rand -hex 32`>
 ```
 
-Этот файл автоматически подгружает **приложение** (`models/index.js`
-вызывает `require('dotenv').config()`).
+Этот файл автоматически подгружают и **приложение** (`models/index.js`
+вызывает `require('dotenv').config()`), и **sequelize-cli** — второе обеспечивает
+файл `.sequelizerc` (`require('dotenv').config()`), который CLI читает до
+`config/config.json`. Без `.sequelizerc` CLI падает с
+`ERROR: Error parsing url: undefined`, т.к. сам `.env` он не подгружает.
 
 Для JWT-аутентификации в `.env` также должен быть секрет:
 
@@ -98,7 +102,9 @@ JWT_SECRET=<случайная строка, например результат
 
 > Для БД Supabase хост pooler'а нужно брать из дашборда:
 > **Project Settings → Database → Connection strings → Session pooler**.
-> `sslmode=require` обязателен (шифрование трафика).
+> `sslmode=no-verify` обязателен: TLS включён, но цепочка сертификатов не
+> проверяется. С `sslmode=require` (pg ≥ 8.16 трактует его как `verify-full`)
+> подключение падает с `self-signed certificate in certificate chain`.
 
 ---
 
@@ -119,13 +125,9 @@ pkill -f 'node server.js'
 
 ## База данных: миграции
 
-Все команды Sequelize CLI выполняются из корня проекта.
-
-> ⚠️ sequelize-cli 6.6.5 **не подгружает** `.env` сам. Если `DATABASE_URL`
-> не задана в вашей оболочке, сначала выполните загрузку переменных:
-> `set -a; . ./.env; set +a` — затем команду миграции. Либо просто
-> выполните команды из шага «Установка и настройка» в README, где окружение
-> уже подгружено.
+Все команды Sequelize CLI выполняются из корня проекта. `.env` подгружает
+`.sequelizerc` (см. раздел «Переменные окружения»), поэтому `DATABASE_URL`
+доступен и для CLI, и для приложения.
 
 ```bash
 # Применить все неприменённые миграции (создать/изменить таблицы)
@@ -162,6 +164,18 @@ npx sequelize-cli db:seed:undo
 # Откатить все сиды
 npx sequelize-cli db:seed:undo:all
 ```
+
+Очистить таблицу перед повторным сидированием (чтобы не было дублей; id снова с 1):
+
+```bash
+node -e "require('dotenv').config();const{Sequelize}=require('sequelize');const s=new Sequelize(process.env.DATABASE_URL,{dialect:'postgres',logging:false});s.query('TRUNCATE \"Employees\" RESTART IDENTITY CASCADE').then(()=>{console.log('Employees очищена');return s.close()})"
+```
+
+> ⚠️ **Сиды в sequelize-cli не отслеживаются** (`seederStorage` по умолчанию —
+> `none`, служебная таблица `SequelizeData` не создаётся). Поэтому `db:seed:all`
+> при каждом запуске вставляет данные заново — легко получить дубликаты.
+> Перед повторным сидированием очистите таблицу (команда выше) или запускайте
+> сиды один раз после `db:migrate`.
 
 ---
 
@@ -249,6 +263,40 @@ const { Sequelize } = require('sequelize');
 
 ---
 
+## Подключение к БД из DBeaver (просмотр структуры/данных)
+
+Параметры подключения (New Database Connection → PostgreSQL → Main):
+
+| Поле | Значение |
+|------|----------|
+| Connect by | `Host` |
+| Host | `aws-1-eu-west-1.pooler.supabase.com` |
+| Port | `5432` |
+| Database | `postgres` |
+| Authentication | `Username/password` |
+| Username | `postgres.duiefqyrzmbpqtigfdmr` |
+| Password | из `.env` (часть строки `DATABASE_URL` между `postgres.<ref>:` и `@`) |
+
+Нюансы:
+
+1. **Username обязательно с project-ref** (`postgres.duiefqyrzmbpqtigfdmr`). Если
+   указать просто `postgres`, pooler отвечает
+   `FATAL: (ENOIDENTIFIER) no tenant identifier provided (external_id or sni_hostname required)` —
+   по логину pooler понимает, в какой проект направлять соединение.
+   Проверено: `postgres` не пускает и без SSL, и с SSL; `postgres.<ref>` пускает в обоих случаях.
+2. **SSL**: в DBeaver (JDBC) `sslmode=no-verify` не поддерживается — это расширение
+   node-postgres. В окне подключения: кнопка «SSH, SSL, …» → **Use SSL**, либо на
+   вкладке **Driver properties** добавить `sslmode=require` (в JDBC `require` =
+   «шифровать, сертификат не проверять»; сертификат pooler'а выпущен внутренним CA
+   `Supabase Intermediate 2021 CA`, поэтому `verify-ca`/`verify-full` не подойдут).
+3. Что смотреть для отчёта: `Schemas → public → Tables` (`Employees`, `SequelizeMeta`),
+   **Columns** таблицы `Employees` (последняя колонка `email` — её добавила миграция),
+   **Constraints** (`Employees_pkey`), **Data** (3 строки из сида), и
+   ПКМ по таблице → **Generate SQL → DDL** (итоговый `CREATE TABLE`).
+4. Альтернатива без установки клиента — Supabase Dashboard → **Table Editor**.
+
+---
+
 ## Тестирование API (curl)
 
 Сначала запустить сервер (`npm run dev`), затем:
@@ -297,8 +345,7 @@ npm install jsonwebtoken bcrypt
 # Сгенерировать модель + миграцию (затем добавить ограничения в models/user.js и миграции)
 npx sequelize-cli model:generate --name User --attributes email:string,passwordHash:string,role:string
 
-# Если sequelize-cli не видит DATABASE_URL, загрузить .env вручную:
-set -a; . ./.env; set +a
+# .env подгружает .sequelizerc — DATABASE_URL виден и для sequelize-cli
 
 npx sequelize-cli db:migrate     # создаёт таблицу Users
 npx sequelize-cli db:seed:all    # создаёт admin@example.com / Admin123!
@@ -356,17 +403,57 @@ curl -X PATCH http://localhost:3000/api/v1/admin/users/2/role \
 
 ---
 
+## Тестирование API (Postman)
+
+Базовый адрес: `http://localhost:3000/api/v1`
+
+| Метод | URL | Тело (Body → raw → JSON) | Ожидаемый ответ |
+|-------|-----|--------------------------|-----------------|
+| GET | `http://localhost:3000/api/v1/employees` | — | 200, массив сотрудников |
+| GET | `http://localhost:3000/api/v1/employees/1` | — | 200, объект сотрудника |
+| POST | `http://localhost:3000/api/v1/employees` | см. ниже | 201, созданный сотрудник |
+| PUT | `http://localhost:3000/api/v1/employees/1` | см. ниже | 200, обновлённый сотрудник |
+| DELETE | `http://localhost:3000/api/v1/employees/1` | — | 200, `{message, deletedEmployee}` |
+
+Тело запроса (POST / PUT), тип **raw → JSON**:
+
+```json
+{
+  "name": "Иван Иванов",
+  "position": "Разработчик",
+  "department": "IT",
+  "rating": 8.5,
+  "reviewDate": "2026-09-01",
+  "email": "ivan.ivanov@example.com"
+}
+```
+
+Все поля обязательны кроме `email`; `rating` — число 1..10,
+`reviewDate` — строка `YYYY-MM-DD`. Ошибки: `400` (валидация), `404` (нет ID),
+`500` (ошибка сервера).
+
+---
+
 ## Известные нюансы
 
 1. **Прямой хост `db.<ref>.supabase.co` недоступен с IPv4** — проект сидит за
    Cloudflare, порт 5432 таймаутит без IPv4 add-on. Поэтому используем **pooler**:
    `aws-1-eu-west-1.pooler.supabase.com:5432` с пользователем
    `postgres.duiefqyrzmbpqtigfdmr` (session mode).
-2. **`sslmode=require`** уже добавлен в `DATABASE_URL` — не убирать.
-3. **sequelize-cli 6.x** сам читает `.env` (через dotenv) — команды миграций
-   работают без ручного `export`.
-4. Пароль в `.env` — файл в `.gitignore`, не коммитить.
-5. `pg`/`pg-hstore` — зависимости драйвера PostgreSQL для Sequelize.
+2. **`sslmode=no-verify`** в `DATABASE_URL` — не менять на `sslmode=require`:
+   pg ≥ 8.16 трактует `require` как `verify-full` и подключение к pooler'у
+   падает с `self-signed certificate in certificate chain`.
+3. **sequelize-cli 6.x сам `.env` НЕ читает**: конфигурация с
+   `"use_env_variable": "DATABASE_URL"` работает только благодаря `.sequelizerc`
+   (там вызывается `require('dotenv').config()`). Не удалять этот файл.
+4. **Sequelize сам разбирает `DATABASE_URL`** и перекрывает `ssl` из
+   `config/config.json` (`Object.assign(dialectOptions, parse(url))`), поэтому
+   SSL-режим задаётся именно в строке подключения.
+5. Пароль в `.env` — файл в `.gitignore`, не коммитить.
+6. `pg`/`pg-hstore` — зависимости драйвера PostgreSQL для Sequelize.
+7. **Сиды не отслеживаются** (`seederStorage: none` по умолчанию) — повторный
+   `db:seed:all` добавит ещё 3 сотрудника. Перед повторным сидированием
+   очищайте таблицу `TRUNCATE` (команда в разделе «База данных: сиды»).
 
 ---
 
@@ -382,6 +469,7 @@ curl -X PATCH http://localhost:3000/api/v1/admin/users/2/role \
 | `npx sequelize-cli db:migrate:undo` | Откатить последнюю миграцию |
 | `npx sequelize-cli db:migrate:undo:all` | Откатить все миграции |
 | `npx sequelize-cli db:seed:all` | Применить все сиды (тестовые данные) |
+| `node -e "...TRUNCATE \"Employees\" RESTART IDENTITY CASCADE..."` | Очистить таблицу сотрудников перед повторным сидом |
 | `npx sequelize-cli db:seed:undo` | Откатить последний сид |
 | `npx sequelize-cli db:seed:undo:all` | Откатить все сиды |
 | `npx sequelize-cli model:generate --name X --attributes ...` | Создать модель + миграцию |

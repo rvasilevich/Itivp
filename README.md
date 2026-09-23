@@ -38,7 +38,7 @@ REST API для управления оценкой эффективности �
 
    - **Session pooler** (рекомендуется для этого приложения — работает по IPv4 с любых сетей):
      ```
-     postgresql://postgres.<project-ref>:<PASSWORD>@aws-<index>-<region>.pooler.supabase.com:5432/postgres?sslmode=require
+     postgresql://postgres.<project-ref>:<PASSWORD>@aws-<index>-<region>.pooler.supabase.com:5432/postgres?sslmode=no-verify
      ```
    - **Direct connection** (только если сеть поддерживает IPv6 или подключён IPv4 add-on):
      ```
@@ -46,6 +46,13 @@ REST API для управления оценкой эффективности �
      ```
 
    > Хост pooler'а (`aws-<index>-<region>.pooler.supabase.com`) нельзя составить вручную — копируйте его из дашборда.
+
+   > ⚠️ **Почему `sslmode=no-verify`, а не `sslmode=require`?** Начиная с `pg@8.16`
+   > (через `pg-connection-string@2.9`) режимы `require` / `prefer` трактуются как
+   > `verify-full`, и подключение к pooler'у Supabase падает с
+   > `self-signed certificate in certificate chain`. Режим `no-verify` включает
+   > TLS-шифрование, но не проверяет цепочку сертификатов — это рабочий вариант
+   > для Supabase pooler без установки CA-сертификата.
 
 ### 2. Установка зависимостей
 
@@ -58,16 +65,27 @@ npm install
 Создайте файл `.env` в корне проекта:
 
 ```
-DATABASE_URL=postgresql://postgres.<project-ref>:<PASSWORD>@aws-<index>-<region>.pooler.supabase.com:5432/postgres?sslmode=require
+DATABASE_URL=postgresql://postgres.<project-ref>:<PASSWORD>@aws-<index>-<region>.pooler.supabase.com:5432/postgres?sslmode=no-verify
+JWT_SECRET=<произвольная_строка>
 ```
 
 Замените `<project-ref>`, `<PASSWORD>`, `<index>` и `<region>` на значения из дашборда Supabase.
+> Файл `.env` в `.gitignore` и не коммитится. Приложение читает его через
+> `require('dotenv').config()` в `models/index.js`, а **sequelize-cli — через
+> `.sequelizerc`** (CLI сам `.env` не подгружает).
 
 ### 4. Запуск миграций и сидов
 
 ```bash
-npx sequelize-cli db:migrate
-npx sequelize-cli db:seed:all
+npx sequelize-cli db:migrate       # применить миграции (создать таблицу Employees)
+npx sequelize-cli db:seed:all      # наполнить базу тестовыми данными (3 сотрудника)
+```
+
+Проверить, что всё настроено правильно (подключение, таблица, модель, CRUD,
+миграция изменения схемы, сиды) можно одной командой:
+
+```bash
+npm run check                      # полная автопроверка лабораторной работы №2
 ```
 
 ### 5. Запуск приложения
@@ -214,3 +232,33 @@ my-node-app/
 | `seeders` | Наполнение базы тестовыми данными |
 | `schemas` | Валидация входных данных |
 | `core` | Конфигурация, ошибки, обработчики |
+
+## База данных (Sequelize)
+
+- Конфигурация подключения: `config/config.json` (указывает на `DATABASE_URL` из `.env`)
+  и `.sequelizerc` (загружает `.env` для sequelize-cli и задаёт пути к config/models/migrations/seeders).
+- Модель сотрудника: `models/employee.js` → таблица `Employees`.
+- Модель пользователя: `models/user.js` → таблица `Users`
+  (`email` unique + NOT NULL, `passwordHash` NOT NULL, `role` по умолчанию `user`).
+- Миграции:
+  - `create-employee` — создание таблицы `Employees`;
+  - `add-email-to-employees` — добавление колонки `email` (изменение схемы);
+  - `create-user` — создание таблицы `Users` (лабораторная работа №3).
+- Сиды:
+  - `seeders/demo-employees` — стартовые данные (3 сотрудника);
+  - `seeders/demo-admin-user` — демо-администратор `admin@example.com` / `Admin123!`.
+- Репозиторий (CRUD через Sequelize): `repositories/employeeRepository.js`
+  (`Employee.findAll` / `findByPk` / `create` / `save` / `destroy`).
+- Автопроверка задач лабораторной работы №2: `scripts/selfcheck.js` (`npm run check`).
+- Автопроверка задач лабораторной работы №3: `scripts/selfcheck-lab3.js` (`npm run check:lab3`).
+
+## Тестирование через Postman
+
+Postman → **New Request**, метод и адрес — из таблицы выше. Для `POST` и `PUT`:
+
+- вкладка **Body** → **raw** → тип **JSON** (не Text!);
+- в поле ввода — JSON из примера выше;
+- заголовок `Content-Type: application/json` Postman ставит сам при выборе JSON.
+
+Postman обращается только к HTTP API приложения (`http://localhost:3000`),
+поэтому о подключении к облачной БД (`sslmode=no-verify`) думать не нужно.
