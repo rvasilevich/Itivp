@@ -1,0 +1,340 @@
+:root {
+  color-scheme: light;
+  font-family: 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+  line-height: 1.5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #eef2f7 0%, #dde6f0 100%);
+  color: #1f2933;
+}
+
+.page {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 24px 16px 40px;
+}
+
+/* ---------- Шапка ---------- */
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 26px;
+  color: #141e2b;
+}
+
+.header-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  background: #e3e8ef;
+  color: #46586d;
+}
+
+.badge-ok {
+  background: #d7f0e0;
+  color: #1c7c44;
+}
+
+.badge-wait {
+  background: #fff3cd;
+  color: #96700c;
+}
+
+.badge-loading {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+/* ---------- Кнопки ---------- */
+.btn {
+  padding: 9px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s, transform 0.05s;
+}
+
+.btn:hover {
+  filter: brightness(1.06);
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn-primary {
+  background: #2563eb;
+  color: #fff;
+}
+
+.btn-danger {
+  background: #dc2626;
+  color: #fff;
+}
+
+.btn-ghost {
+  background: #e3e8ef;
+  color: #33425a;
+}
+
+.btn-small {
+  padding: 6px 10px;
+  font-size: 12.5px;
+}
+
+.btn-edit {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.btn-delete {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+/* ---------- Статистика ---------- */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.stat-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 14px 16px;
+  box-shadow: 0 2px 8px rgba(20, 30, 43, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.stat-card-wide {
+  grid-column: span 1;
+  justify-content: center;
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #141e2b;
+}
+
+.stat-value-small {
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stat-label {
+  font-size: 12.5px;
+  color: #64748b;
+}
+
+/* ---------- Форма ---------- */
+.employee-form {
+  background: #fff;
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: 0 2px 8px rgba(20, 30, 43, 0.08);
+  margin-bottom: 16px;
+}
+
+.employee-form h2 {
+  margin: 0 0 12px;
+  font-size: 17px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.form-grid input,
+.toolbar select,
+.toolbar input {
+  padding: 9px 11px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  background: #fff;
+}
+
+.form-grid input:focus,
+.toolbar select:focus,
+.toolbar input:focus {
+  outline: 2px solid #93c5fd;
+  border-color: #3b82f6;
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+/* ---------- Панель фильтров ---------- */
+.toolbar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.search-input {
+  flex: 1 1 260px;
+  min-width: 200px;
+}
+
+.toolbar select {
+  padding: 9px 11px;
+}
+
+/* ---------- Список ---------- */
+.employee-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.employee-item {
+  background: #fff;
+  border-radius: 12px;
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  box-shadow: 0 2px 8px rgba(20, 30, 43, 0.08);
+  border-left: 4px solid transparent;
+  transition: border-color 0.2s;
+}
+
+.employee-item.is-editing {
+  border-left-color: #2563eb;
+  background: #f8faff;
+}
+
+.employee-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.employee-info strong {
+  font-size: 15.5px;
+  color: #141e2b;
+}
+
+.employee-info .email {
+  font-size: 12.5px;
+  color: #64748b;
+}
+
+.department-tag {
+  align-self: flex-start;
+  background: #eef2ff;
+  color: #4338ca;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  margin-top: 4px;
+  font-weight: 600;
+}
+
+.employee-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  min-width: 110px;
+}
+
+.rating {
+  font-weight: 700;
+  font-size: 17px;
+  color: #b45309;
+}
+
+.review-date {
+  font-size: 12.5px;
+  color: #64748b;
+}
+
+.employee-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.empty-state {
+  background: #fff;
+  border-radius: 12px;
+  padding: 32px;
+  text-align: center;
+  color: #64748b;
+  box-shadow: 0 2px 8px rgba(20, 30, 43, 0.08);
+}
+
+.app-footer {
+  margin-top: 18px;
+  font-size: 13px;
+  color: #64748b;
+  text-align: center;
+}
+
+.app-footer code {
+  background: #e3e8ef;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+/* ---------- Адаптивность ---------- */
+@media (max-width: 760px) {
+  .stats-grid,
+  .form-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 520px) {
+  .stats-grid,
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}

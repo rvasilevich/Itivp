@@ -27,14 +27,16 @@
 10. [Проверка соединения с БД](#проверка-соединения-с-бд)
 11. [Тестирование API (curl)](#тестирование-api-curl)
 12. [Аутентификация: JWT + RBAC](#аутентификация-jwt--rbac)
-13. [Известные нюансы](#известные-нюансы)
-14. [Сводная таблица команд](#сводная-таблица-команд)
+13. [Фронтенд (my-app, Vite + React)](#фронтенд-my-app-vite--react)
+14. [Известные нюансы](#известные-нюансы)
+15. [Сводная таблица команд](#сводная-таблица-команд)
 
 ---
 
 ## Обзор
 
 - **Стек:** Node.js + Express + Sequelize (ORM) + PostgreSQL (облачная БД **Supabase**).
+- **Фронтенд:** `my-app/` — Vite + React (ЛР №4, компонент `EmployeeList`), см. раздел [Фронтенд (my-app, Vite + React)](#фронтенд-my-app-vite--react).
 - **Точка входа:** `server.js` → порт `3000`.
 - **Слои:** `app/api/v1` (маршруты) → `services` (бизнес-логика) →
   `repositories` (Sequelize) → `models` (модели), `migrations`/`seeders` (схема и данные).
@@ -485,6 +487,39 @@ curl -X PATCH http://localhost:3000/api/v1/admin/users/2/role \
 
 ---
 
+## Фронтенд (my-app, Vite + React)
+
+ЛР №4 — React-клиент `my-app/` (компонент `src/components/EmployeeList.jsx`:
+управление списком сотрудников на `useState`/`useEffect`, хранение в
+`localStorage`, фильтрация/сортировка, автосохранение с debounce 500 мс).
+Все команды выполняются **внутри каталога `my-app`**:
+
+```bash
+cd my-app
+
+# 1. Установить зависимости клиента (React, Vite, Vitest)
+npm install
+
+# 2. Запуск dev-сервера Vite на :5173 (http://localhost:5173)
+npm run dev
+
+# 3. Юнит-тесты (Vitest + Testing Library, 8 проверок компонента EmployeeList)
+npm run test
+
+# 4. Production-сборка в my-app/dist/ (каталог в .gitignore, не коммитится)
+npm run build
+
+# 5. Линтер (oxlint)
+npm run lint
+```
+
+Проверка после изменений: `npm run test` → `Tests 8 passed (8)`,
+затем `npm run dev` и открыть <http://localhost:5173>. Данные списка
+хранятся в `localStorage` браузера под ключом `employees_rating_list_v1`
+(вкладка DevTools → Application → Local Storage).
+
+---
+
 ## Известные нюансы
 
 1. **Прямой хост `db.<ref>.supabase.co` недоступен с IPv4** — проект сидит за
@@ -534,5 +569,10 @@ curl -X PATCH http://localhost:3000/api/v1/admin/users/2/role \
 | `curl http://localhost:3000/api/v1/auth/register` | Проверить регистрацию (см. раздел «Аутентификация») |
 | `curl http://localhost:3000/api/v1/employees` | Проверить API (GET список) |
 | `npm run check` | Автопроверка задач лаб. работы №2 (selfcheck) |
+| `cd my-app && npm install` | Установить зависимости фронтенда (React/Vite/Vitest) |
+| `cd my-app && npm run dev` | Запуск Vite dev-сервера клиента на :5173 |
+| `cd my-app && npm run test` | Юнит-тесты компонента EmployeeList (Vitest, 8 шт.) |
+| `cd my-app && npm run build` | Production-сборка клиента в `my-app/dist/` |
+| `cd my-app && npm run lint` | Линтер фронтенда (oxlint) |
 
 > **Новые ручные команды дописывать в эту таблицу и в соответствующий раздел!**
