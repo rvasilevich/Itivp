@@ -29,7 +29,16 @@ app.use('/api/v1', api.v1.router);
 
 // Обработка несуществующих маршрутов — 404
 app.use((req, res) => {
-  res.status(404).json({ error: `Маршрут ${req.method} ${req.originalUrl} не найден` });
+  const isApiV1 = req.originalUrl.startsWith('/api/v1');
+
+  const hint = isApiV1
+    ? 'Список доступных эндпоинтов: GET /api/v1'
+    : `Все эндпоинты приложения доступны только под префиксом /api/v1 — например: ${req.method} /api/v1${req.originalUrl}`;
+
+  res.status(404).json({
+    error: `Маршрут ${req.method} ${req.originalUrl} не найден`,
+    hint
+  });
 });
 
 // Глобальный обработчик ошибок (error-handling middleware)

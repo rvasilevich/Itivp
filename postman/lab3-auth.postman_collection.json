@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "a1b2c3d4-0000-4000-8000-lab3auth0001",
     "name": "Lab 3 — JWT + RBAC (my-node-app)",
-    "description": "Лабораторная работа №3: регистрация, вход по JWT, защищённые маршруты и ролевая модель (RBAC).\n\nПорядок работы:\n1. Запустить сервер: npm start (http://localhost:3000).\n2. Проверить переменную коллекции baseUrl = http://localhost:3000.\n3. Выполнять запросы по порядку: 1.1-1.3, затем 2.x (защищённые) и 3.x (админские).\n\nСкрипты запросов сами сохраняют токены в переменные коллекции: token (обычный пользователь) и adminToken (администратор).",
+    "description": "Лабораторная работа №3: регистрация, вход по JWT, защищённые маршруты и ролевая модель (RBAC).\n\nВАЖНО: переменная baseUrl — только хост (http://localhost:3000), БЕЗ /api/v1: префикс /api/v1 уже прописан в путях запросов (например {{baseUrl}}/api/v1/employees). Если добавить /api/v1 в baseUrl, получится /api/v1/api/v1/... и сервер ответит 404.\n\nПорядок работы:\n1. Запустить сервер: npm start (http://localhost:3000).\n2. Проверить переменную коллекции baseUrl = http://localhost:3000.\n3. Выполнять запросы по порядку: 0.1 (справочник) → 1.1-1.4 → 2.x (защищённые) → 3.x (админские).\n\nСкрипты запросов сами сохраняют токены в переменные коллекции: token (обычный пользователь) и adminToken (администратор).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -13,6 +13,25 @@
     { "key": "email", "value": "" }
   ],
   "item": [
+    {
+      "name": "0.1 Справочник эндпоинтов — GET /api/v1 (все пути с префиксом /api/v1)",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('Статус 200', () => pm.response.to.have.status(200));",
+        "const body = pm.response.json();",
+        "pm.test('Вернулся список эндпоинтов', () => pm.expect(body.endpoints).to.be.an('array'));",
+        "pm.test('Все пути начинаются с /api/v1', () => {",
+        "  body.endpoints.forEach((e) => pm.expect(e.path).to.include('/api/v1'));",
+        "});",
+        "console.log('baseUrl: ' + body.baseUrl + ', эндпоинтов: ' + body.endpoints.length);"
+      ] } }],
+      "request": {
+        "method": "GET",
+        "description": "Справочник всех маршрутов приложения. Все они доступны только под префиксом /api/v1.",
+        "header": [],
+        "auth": { "type": "noauth" },
+        "url": { "raw": "{{baseUrl}}/api/v1", "host": ["{{baseUrl}}"], "path": ["api", "v1"] }
+      }
+    },
     {
       "name": "1.1 Регистрация (уникальный email) — POST /api/v1/auth/register",
       "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
