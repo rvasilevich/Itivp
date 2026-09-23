@@ -68,6 +68,67 @@ body {
   color: #1d4ed8;
 }
 
+.badge-error {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+/* ---------- Уведомления (toast) ---------- */
+.toast {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  margin: 0 auto 12px;
+  max-width: 640px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(20, 30, 43, 0.12);
+}
+
+.toast-success {
+  background: #d7f0e0;
+  color: #1c7c44;
+}
+
+.toast-error {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+/* ---------- Панель ошибки загрузки ---------- */
+.error-panel {
+  background: #fff;
+  border: 1px solid #fecaca;
+  border-left: 4px solid #dc2626;
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+  color: #b91c1c;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 2px 8px rgba(20, 30, 43, 0.08);
+}
+
+.error-panel--inline {
+  padding: 10px 14px;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.error-panel--inline .error-panel__message,
+.error-panel--inline span {
+  flex: 1;
+}
+
+.error-panel strong {
+  font-size: 15px;
+}
+
 /* ---------- Кнопки ---------- */
 .btn {
   padding: 9px 16px;

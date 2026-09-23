@@ -11,7 +11,7 @@ const router = express.Router();
 // GET /api/v1 — возвращает этот список, чтобы легко проверить актуальные пути.
 const API_INDEX = [
   { method: 'GET', path: '/api/v1', access: 'все', description: 'Справочник эндпоинтов' },
-  { method: 'GET', path: '/api/v1/employees', access: 'все', description: 'Список всех сотрудников' },
+  { method: 'GET', path: '/api/v1/employees', access: 'все', description: 'Список всех сотрудников (поддерживает ?search=)' },
   { method: 'GET', path: '/api/v1/employees/:id', access: 'все', description: 'Сотрудник по ID' },
   { method: 'POST', path: '/api/v1/employees', access: 'все', description: 'Создать сотрудника' },
   { method: 'PUT', path: '/api/v1/employees/:id', access: 'все', description: 'Обновить сотрудника' },

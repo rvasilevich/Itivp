@@ -36,7 +36,7 @@
 ## Обзор
 
 - **Стек:** Node.js + Express + Sequelize (ORM) + PostgreSQL (облачная БД **Supabase**).
-- **Фронтенд:** `my-app/` — Vite + React (ЛР №4, компонент `EmployeeList`), см. раздел [Фронтенд (my-app, Vite + React)](#фронтенд-my-app-vite--react).
+- **Фронтенд:** `my-app/` — Vite + React (ЛР №4–№5: локальный список → интеграция с REST API через axios), см. раздел [Фронтенд (my-app, Vite + React)](#фронтенд-my-app-vite--react).
 - **Точка входа:** `server.js` → порт `3000`.
 - **Слои:** `app/api/v1` (маршруты) → `services` (бизнес-логика) →
   `repositories` (Sequelize) → `models` (модели), `migrations`/`seeders` (схема и данные).
@@ -323,6 +323,9 @@ const { Sequelize } = require('sequelize');
 # GET — список всех сотрудников
 curl http://localhost:3000/api/v1/employees
 
+# GET — серверный поиск (регистронезависимый, по ФИО/должности/отделу/email)
+curl --get http://localhost:3000/api/v1/employees --data-urlencode 'search=разработ'
+
 # GET — сотрудник по ID
 curl http://localhost:3000/api/v1/employees/1
 
@@ -489,34 +492,54 @@ curl -X PATCH http://localhost:3000/api/v1/admin/users/2/role \
 
 ## Фронтенд (my-app, Vite + React)
 
-ЛР №4 — React-клиент `my-app/` (компонент `src/components/EmployeeList.jsx`:
-управление списком сотрудников на `useState`/`useEffect`, хранение в
-`localStorage`, фильтрация/сортировка, автосохранение с debounce 500 мс).
+ЛР №4–№5 — React-клиент `my-app/` (компонент `src/components/EmployeeList.jsx`:
+оценка эффективности сотрудников — добавление, редактирование, удаление,
+фильтрация по отделу, сортировка, статистика).
+
+Начиная с ЛР №5 фронтенд **полностью взаимодействует с REST API** сервера
+(список больше не хранится в `localStorage` — там остаётся только JWT-токен):
+
+- `src/api.js` — axios-клиент: baseURL из `my-app/.env` (`VITE_API_URL`),
+  перехватчик подставляет JWT-токен (`Authorization: Bearer …`), нормализация
+  ошибок, CRUD-функции (`fetchEmployees/createEmployee/updateEmployee/deleteEmployee`);
+- GET `/employees` — загрузка списка с индикаторами «загрузка / ошибка» и
+  кнопкой «Повторить»;
+- POST / PUT / DELETE `/employees/:id` — CRUD с **оптимистичным обновлением**
+  UI (временный id → реальный) и откатом при ошибке сервера (toast-уведомления);
+- **доп. улучшение ЛР №5:** серверный поиск (`?search=`) с debounce 500 мс и
+  отменой устаревших запросов через `AbortController` (при размонтировании тоже);
+- `useEffect [employees.length]` — обновление `document.title`.
+
+### Настройка и запуск
+
+Сначала поднимите сервер (раздел «Сервер»), затем — клиент.
 Все команды выполняются **внутри каталога `my-app`**:
 
 ```bash
 cd my-app
 
-# 1. Установить зависимости клиента (React, Vite, Vitest)
+# 1. Установить зависимости клиента (React, Vite, axios, Vitest)
 npm install
 
-# 2. Запуск dev-сервера Vite на :5173 (http://localhost:5173)
+# 2. Переменная окружения: создать my-app/.env (шаблон — my-app/.env.example)
+#    VITE_API_URL=http://localhost:3000/api/v1
+
+# 3. Запуск dev-сервера Vite на :5173 (http://localhost:5173)
 npm run dev
 
-# 3. Юнит-тесты (Vitest + Testing Library, 8 проверок компонента EmployeeList)
+# 4. Юнит-тесты (Vitest + Testing Library, 12 проверок, API замокан)
 npm run test
 
-# 4. Production-сборка в my-app/dist/ (каталог в .gitignore, не коммитится)
+# 5. Production-сборка в my-app/dist/ (каталог в .gitignore, не коммитится)
 npm run build
 
-# 5. Линтер (oxlint)
+# 6. Линтер (oxlint)
 npm run lint
 ```
 
-Проверка после изменений: `npm run test` → `Tests 8 passed (8)`,
-затем `npm run dev` и открыть <http://localhost:5173>. Данные списка
-хранятся в `localStorage` браузера под ключом `employees_rating_list_v1`
-(вкладка DevTools → Application → Local Storage).
+Проверка после изменений: `npm run test` → `Tests 12 passed (12)`,
+затем `npm run dev` и открыть <http://localhost:5173> (сервер на :3000 должен
+работать — данные приходят с REST API, CORS включён в `server.js`).
 
 ---
 
@@ -540,6 +563,13 @@ npm run lint
 7. **Сиды не отслеживаются** (`seederStorage: none` по умолчанию) — повторный
    `db:seed:all` добавит ещё 3 сотрудника. Перед повторным сидированием
    очищайте таблицу `TRUNCATE` (команда в разделе «База данных: сиды»).
+8. **`my-app/.env`: `VITE_API_URL` должен указывать на `/api/v1`**
+   (`http://localhost:3000/api/v1`), а не на `/api` из примеров generic-шаблонов —
+   все маршруты сервера живут под префиксом `/api/v1` (см. раздел «Сервер»).
+   Без `.env` клиент откатится на дефолт `http://localhost:3000/api/v1` из `src/api.js`.
+9. **После изменения `package-lock.json` в `my-app` Vite перестартует
+   препреобмен зависимостей** (лог `Re-optimizing dependencies because lockfile
+   has changed`) — это нормально, подождите vài секунд.
 
 ---
 
@@ -571,8 +601,11 @@ npm run lint
 | `npm run check` | Автопроверка задач лаб. работы №2 (selfcheck) |
 | `cd my-app && npm install` | Установить зависимости фронтенда (React/Vite/Vitest) |
 | `cd my-app && npm run dev` | Запуск Vite dev-сервера клиента на :5173 |
-| `cd my-app && npm run test` | Юнит-тесты компонента EmployeeList (Vitest, 8 шт.) |
+| `cd my-app && npm run test` | Юнит-тесты компонента EmployeeList (Vitest, 12 шт., мок API) |
 | `cd my-app && npm run build` | Production-сборка клиента в `my-app/dist/` |
 | `cd my-app && npm run lint` | Линтер фронтенда (oxlint) |
+| `npm install cors` | Добавить CORS middleware (нужен Client → API, ЛР №5) |
+| `cd my-app && npm install axios` | Установить axios — HTTP-клиент фронтенда (ЛР №5) |
+| `curl --get http://localhost:3000/api/v1/employees --data-urlencode 'search=...'` | Проверить серверный поиск `?search=` (ЛР №5) |
 
 > **Новые ручные команды дописывать в эту таблицу и в соответствующий раздел!**

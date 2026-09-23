@@ -8,9 +8,9 @@ class EmployeeService {
     this.repository = new EmployeeRepository();
   }
 
-  // Получить всех сотрудников
-  async getAllEmployees() {
-    return this.repository.findAll();
+  // Получить всех сотрудников (опционально с поиском по ?search=)
+  async getAllEmployees({ search } = {}) {
+    return this.repository.findAll({ search });
   }
 
   // Получить сотрудника по ID

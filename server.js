@@ -3,10 +3,14 @@
 require('dotenv').config();
 
 const express = require('express');
+const cors = require('cors');
 const { config, errorHandler } = require('./core');
 const { api } = require('./app');
 
 const app = express();
+
+// CORS — разрешает запросы с клиентского React-приложения (localhost:5173, ЛР №5)
+app.use(cors());
 
 // Нормализация URL: Postman/коллекции часто склеивают базовый URL и путь,
 // получая двойной слэш — http://localhost:3000//api/v1/auth/register.

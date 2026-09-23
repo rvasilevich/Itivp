@@ -20,41 +20,56 @@ REST API для управления оценкой эффективности �
 
 ## Технологии
 
+Сервер:
+
 - Node.js
-- Express.js
+- Express.js (в т.ч. middleware `cors` — CORS для фронтенда)
 - Sequelize (ORM)
 - PostgreSQL
 - JSON Web Token (jsonwebtoken)
 - bcrypt (хеширование паролей)
 - Nodemon (для разработки)
-- React + Vite (фронтенд `my-app/`, ЛР №4)
-- localStorage (клиентское хранение списка сотрудников)
 
-## Фронтенд (ЛР №4)
+Фронтенд (`my-app/`, лабораторные работы №4–№5):
+
+- React 19 + Vite
+- axios (HTTP-клиент, REST API)
+- Vitest + Testing Library (тесты с моком API)
+
+## Фронтенд (ЛР №4–№5)
 
 Каталог `my-app/` — React-приложение (Vite) для управления списком сотрудников
 предметной области «Оценка эффективности сотрудников».
 
-Компонент `my-app/src/components/EmployeeList.jsx`:
+**ЛР №4** — управление локальным списком на `useState`/`useEffect`: добавление /
+редактирование / удаление, фильтрация и сортировка, статистика, заголовок
+`document.title` с количеством элементов; хранение списка в `localStorage`
+(автосохранение с debounce 500 мс, загрузка при монтировании).
 
-- `useState` — массив сотрудников, значения полей формы, состояние фильтра/сортировки;
-- `useEffect []` — загрузка списка из `localStorage` при монтировании (с имитацией
-  загрузки с сервера, задержка 1 с), инициализация демо-данными, если сохранений нет;
-- `useEffect [employees]` — автосохранение в `localStorage` (`JSON.stringify`)
-  с debounce 500 мс после последнего изменения;
-- `useEffect [employees.length]` — обновление `document.title` (кол-во элементов);
-- добавление / редактирование / удаление сотрудников;
-- фильтрация (поиск по ФИО/должности/отделу, выбор отдела) и сортировка
-  (ФИО, рейтинг, отдел, дата оценки; по возрастанию/убыванию);
-- статистика: всего, средний рейтинг, рейтинг ≥ 8, лучший сотрудник.
+**ЛР №5** — интеграция с REST API этого репозитория:
 
-Запуск (подробности — в `RUNBOOK.md`, раздел «Фронтенд»):
+- `src/api.js` — axios-клиент: baseURL из `my-app/.env` (`VITE_API_URL`),
+  перехватчик запросов добавляет JWT-токен из `localStorage`
+  (`Authorization: Bearer <token>`), нормализация ошибок и функции
+  `fetchEmployees / createEmployee / updateEmployee / deleteEmployee`;
+- `src/components/EmployeeList.jsx` — GET списка с индикаторами загрузки и
+  ошибки + кнопкой «Повторить»; **оптимистичное обновление**: добавление
+  (временный id → реальный id из ответа сервера), редактирование (PUT) и
+  удаление (DELETE) с откатом состояния при ошибке сервера и toast-уведомлениями;
+- **дополнительное улучшение:** серверный поиск (`?search=`) с debounce 500 мс
+  и отменой устаревших запросов через `AbortController` (в т.ч. при размонтировании);
+- `useEffect [employees.length]` — обновление `document.title`;
+- клиентская фильтрация по отделу и сортировка (ЛР №4) сохранены.
+
+Настройка и запуск (подробности — в `RUNBOOK.md`, раздел «Фронтенд»):
 
 ```bash
+# создайте my-app/.env (шаблон — my-app/.env.example):
+#   VITE_API_URL=http://localhost:3000/api/v1
 cd my-app
-npm install
-npm run dev    # http://localhost:5173
-npm run test   # Vitest: 8 юнит-тестов компонента
+npm install        # зависимости, в т.ч. axios
+npm run dev        # http://localhost:5173 (сервер должен работать на :3000)
+npm run test       # Vitest: 12 тестов (API замокан)
 ```
 
 ## Установка и настройка
@@ -126,6 +141,23 @@ npm start            # обычный запуск
 
 Сервер запускается на порту **3000**.
 
+### 6. Запуск фронтенда (лабораторные работы №4–№5)
+
+Фронтенд (React + Vite, папка `my-app`) обращается к REST API сервера:
+
+```bash
+cd my-app
+npm install                 # установить зависимости (в т.ч. axios)
+# создайте my-app/.env (см. .env.example):
+#   VITE_API_URL=http://localhost:3000/api/v1
+npm run dev                 # Vite dev-сервер на http://localhost:5173
+npm run test                # vitest — 12 тестов (мок API)
+npm run lint                # oxlint — 0 warnings
+npm run build               # production-сборка в my-app/dist
+```
+
+Полный список команд — в `RUNBOOK.md`.
+
 ## API
 
 **Важно:** все эндпоинты приложения доступны только под префиксом `/api/v1`
@@ -147,6 +179,10 @@ npm start            # обычный запуск
 | POST   | `/api/v1/employees`                   | Добавить нового сотрудника            |
 | PUT    | `/api/v1/employees/:id`               | Полностью обновить данные сотрудника  |
 | DELETE | `/api/v1/employees/:id`               | Удалить сотрудника                    |
+
+> GET `/api/v1/employees?search=<фрагмент>` — серверный поиск без учёта регистра
+> (ILIKE) по ФИО, должности, отделу и email. Используется фронтендом в ЛР №5
+> с debounce на ввод.
 
 ### Пример тела запроса (POST / PUT)
 
@@ -255,6 +291,21 @@ my-node-app/
 ├── .env                        # Переменные окружения (не в git)
 ├── package.json
 └── README.md
+```
+
+Фронтенд (лабораторные работы №4–№5) — отдельное Vite + React SPA в `my-app/`:
+
+```
+my-app/
+├── .env                        # VITE_API_URL (не в git), шаблон — .env.example
+├── src/
+│   ├── api.js                  # axios-клиент REST API (JWT-перехватчик, CRUD-функции)
+│   ├── App.jsx
+│   ├── components/
+│   │   ├── EmployeeList.jsx    # список: GET/POST/PUT/DELETE, loading/error, поиск
+│   │   └── EmployeeList.test.jsx  # vitest-тесты с моком api (12 шт.)
+│   └── data/demoEmployees.js   # эталонная структура объекта Employee
+└── vite.config.js
 ```
 
 ### Слои и их ответственность

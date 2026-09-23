@@ -1,10 +1,25 @@
+const { Op } = require('sequelize');
 const { Employee } = require('../models');
 
 // Репозиторий сотрудников — работа с данными через Sequelize (PostgreSQL)
 class EmployeeRepository {
-  // Получить всех сотрудников
-  async findAll() {
-    return Employee.findAll();
+  // Получить всех сотрудников (с необязательным серверным поиском ?search=)
+  async findAll({ search } = {}) {
+    const where = {};
+
+    // Серверный поиск: нечувствительное к регистру частичное совпадение
+    // по ФИО, должности, отделу и email (ILIKE '%<search>%').
+    if (search && search.trim() !== '') {
+      const pattern = `%${search.trim()}%`;
+      where[Op.or] = [
+        { name: { [Op.iLike]: pattern } },
+        { position: { [Op.iLike]: pattern } },
+        { department: { [Op.iLike]: pattern } },
+        { email: { [Op.iLike]: pattern } }
+      ];
+    }
+
+    return Employee.findAll({ where });
   }
 
   // Получить сотрудника по ID
