@@ -1,0 +1,238 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-0000-4000-8000-lab3auth0001",
+    "name": "Lab 3 — JWT + RBAC (my-node-app)",
+    "description": "Лабораторная работа №3: регистрация, вход по JWT, защищённые маршруты и ролевая модель (RBAC).\n\nПорядок работы:\n1. Запустить сервер: npm start (http://localhost:3000).\n2. Проверить переменную коллекции baseUrl = http://localhost:3000.\n3. Выполнять запросы по порядку: 1.1-1.3, затем 2.x (защищённые) и 3.x (админские).\n\nСкрипты запросов сами сохраняют токены в переменные коллекции: token (обычный пользователь) и adminToken (администратор).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "token", "value": "" },
+    { "key": "adminToken", "value": "" },
+    { "key": "userId", "value": "" },
+    { "key": "email", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1.1 Регистрация (уникальный email) — POST /api/v1/auth/register",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('Статус 201 Created', () => pm.response.to.have.status(201));",
+        "const user = pm.response.json();",
+        "pm.collectionVariables.set('userId', user.id);",
+        "pm.collectionVariables.set('email', user.email);",
+        "pm.test('Ответ без passwordHash', () => pm.expect(user).to.not.have.property('passwordHash'));",
+        "pm.test('Роль по умолчанию — user', () => pm.expect(user.role).to.eql('user'));",
+        "console.log('Создан пользователь id=' + user.id + ' email=' + user.email);"
+      ] } }],
+      "request": {
+        "method": "POST",
+        "description": "Email уникальный: tester+{{$timestamp}}@example.com — запрос можно выполнять сколько угодно раз. Если отправить существующий email, вернётся 409.",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"email\": \"tester+{{$timestamp}}@example.com\",\n  \"password\": \"secret123\"\n}", "options": { "raw": { "language": "json" } } },
+        "url": { "raw": "{{baseUrl}}/api/v1/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "register"] }
+      }
+    },
+    {
+      "name": "1.2 Вход (пользователь) — POST /api/v1/auth/login",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('Статус 200', () => pm.response.to.have.status(200));",
+        "const body = pm.response.json();",
+        "pm.test('В ответе есть token и user', () => {",
+        "  pm.expect(body).to.have.property('token');",
+        "  pm.expect(body.user).to.have.property('email');",
+        "});",
+        "pm.collectionVariables.set('token', body.token);",
+        "console.log('token сохранён в переменную коллекции token');"
+      ] } }],
+      "request": {
+        "method": "POST",
+        "description": "Логин пользователя, созданного запросом 1.1 (email берётся из переменной коллекции email).",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"secret123\"\n}", "options": { "raw": { "language": "json" } } },
+        "url": { "raw": "{{baseUrl}}/api/v1/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "login"] }
+      }
+    },
+    {
+      "name": "1.3 Вход (администратор) — POST /api/v1/auth/login",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('Статус 200', () => pm.response.to.have.status(200));",
+        "const body = pm.response.json();",
+        "pm.test('Роль в ответе — admin', () => pm.expect(body.user.role).to.eql('admin'));",
+        "pm.collectionVariables.set('adminToken', body.token);",
+        "console.log('adminToken сохранён в переменную коллекции adminToken');"
+      ] } }],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"Admin123!\"\n}", "options": { "raw": { "language": "json" } } },
+        "url": { "raw": "{{baseUrl}}/api/v1/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "login"] }
+      }
+    },
+    {
+      "name": "1.4 Неверный пароль — POST /api/v1/auth/login (ожидаем 401)",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('Статус 401', () => pm.response.to.have.status(401));",
+        "pm.test('Есть поле error', () => pm.expect(pm.response.json()).to.have.property('error'));"
+      ] } }],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"wrong-password\"\n}", "options": { "raw": { "language": "json" } } },
+        "url": { "raw": "{{baseUrl}}/api/v1/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "login"] }
+      }
+    },
+    {
+      "name": "2.1 ЗАЩИЩЁННЫЙ: профиль — GET /api/v1/profile (нужен Bearer-токен)",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('Статус 200', () => pm.response.to.have.status(200));",
+        "const me = pm.response.json();",
+        "pm.test('Вернулись данные текущего пользователя', () => {",
+        "  pm.expect(me).to.have.property('email');",
+        "  pm.expect(me).to.not.have.property('passwordHash');",
+        "});"
+      ] } }],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
+        "url": { "raw": "{{baseUrl}}/api/v1/profile", "host": ["{{baseUrl}}"], "path": ["api", "v1", "profile"] }
+      }
+    },
+    {
+      "name": "2.2 ЗАЩИЩЁННЫЙ: профиль БЕЗ токена — GET /api/v1/profile (ожидаем 401)",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('Статус 401 (без токена доступа нет)', () => pm.response.to.have.status(401));",
+        "pm.test('Сообщение про Authorization: Bearer', () => {",
+        "  pm.expect(pm.response.json().error).to.include('Bearer');",
+        "});"
+      ] } }],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": { "type": "noauth" },
+        "url": { "raw": "{{baseUrl}}/api/v1/profile", "host": ["{{baseUrl}}"], "path": ["api", "v1", "profile"] }
+      }
+    },
+    {
+      "name": "2.3 ЗАЩИЩЁННЫЙ: профиль с битым токеном — GET /api/v1/profile (ожидаем 401)",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('Статус 401 (токен недействителен)', () => pm.response.to.have.status(401));"
+      ] } }],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "not.a.valid.jwt", "type": "string" }] },
+        "url": { "raw": "{{baseUrl}}/api/v1/profile", "host": ["{{baseUrl}}"], "path": ["api", "v1", "profile"] }
+      }
+    },
+    {
+      "name": "2.4 ЗАЩИЩЁННЫЙ: удалить свою учётную запись — DELETE /api/v1/profile",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('Статус 200', () => pm.response.to.have.status(200));"
+      ] } }],
+      "request": {
+        "method": "DELETE",
+        "description": "ВНИМАНИЕ: удаляет учётную запись, которой принадлежит {{token}}. После этого вход этим пользователем невозможен — чтобы продолжить, создайте нового пользователя запросом 1.1 (или верните демо-учётку сидом).",
+        "header": [],
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
+        "url": { "raw": "{{baseUrl}}/api/v1/profile", "host": ["{{baseUrl}}"], "path": ["api", "v1", "profile"] }
+      }
+    },
+    {
+      "name": "3.1 RBAC: список пользователей — GET /api/v1/admin/users (токен admin → 200)",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('Статус 200', () => pm.response.to.have.status(200));",
+        "pm.test('Ответ — массив пользователей', () => pm.expect(pm.response.json()).to.be.an('array'));"
+      ] } }],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }] },
+        "url": { "raw": "{{baseUrl}}/api/v1/admin/users", "host": ["{{baseUrl}}"], "path": ["api", "v1", "admin", "users"] }
+      }
+    },
+    {
+      "name": "3.2 RBAC: список пользователей с токеном обычного user (ожидаем 403)",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('Статус 403 — роль не admin', () => pm.response.to.have.status(403));",
+        "pm.test('Сообщение про роль администратора', () => {",
+        "  pm.expect(pm.response.json().error).to.include('администратора');",
+        "});"
+      ] } }],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
+        "url": { "raw": "{{baseUrl}}/api/v1/admin/users", "host": ["{{baseUrl}}"], "path": ["api", "v1", "admin", "users"] }
+      }
+    },
+    {
+      "name": "3.3 RBAC: список пользователей БЕЗ токена (ожидаем 401)",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('Статус 401', () => pm.response.to.have.status(401));"
+      ] } }],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": { "type": "noauth" },
+        "url": { "raw": "{{baseUrl}}/api/v1/admin/users", "host": ["{{baseUrl}}"], "path": ["api", "v1", "admin", "users"] }
+      }
+    },
+    {
+      "name": "3.4 RBAC: пользователь по ID — GET /api/v1/admin/users/{{userId}} (нужен admin)",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('Статус 200', () => pm.response.to.have.status(200));",
+        "pm.test('Вернулся пользователь с ролями user/admin', () => {",
+        "  pm.expect(['user', 'admin']).to.include(pm.response.json().role);",
+        "});"
+      ] } }],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }] },
+        "url": { "raw": "{{baseUrl}}/api/v1/admin/users/{{userId}}", "host": ["{{baseUrl}}"], "path": ["api", "v1", "admin", "users", "{{userId}}"] }
+      }
+    },
+    {
+      "name": "3.5 RBAC: сменить роль — PATCH /api/v1/admin/users/{{userId}}/role (нужен admin)",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('Статус 200', () => pm.response.to.have.status(200));",
+        "pm.test('Роль стала admin', () => pm.expect(pm.response.json().role).to.eql('admin'));",
+        "console.log('После смены роли нужен повторный вход (роль зашита в JWT)');"
+      ] } }],
+      "request": {
+        "method": "PATCH",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }] },
+        "body": { "mode": "raw", "raw": "{\n  \"role\": \"admin\"\n}", "options": { "raw": { "language": "json" } } },
+        "url": { "raw": "{{baseUrl}}/api/v1/admin/users/{{userId}}/role", "host": ["{{baseUrl}}"], "path": ["api", "v1", "admin", "users", "{{userId}}", "role"] }
+      }
+    },
+    {
+      "name": "3.6 RBAC: неверная роль — PATCH .../role body {\"role\":\"superuser\"} (ожидаем 400)",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('Статус 400 — валидация роли', () => pm.response.to.have.status(400));"
+      ] } }],
+      "request": {
+        "method": "PATCH",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }] },
+        "body": { "mode": "raw", "raw": "{\n  \"role\": \"superuser\"\n}", "options": { "raw": { "language": "json" } } },
+        "url": { "raw": "{{baseUrl}}/api/v1/admin/users/{{userId}}/role", "host": ["{{baseUrl}}"], "path": ["api", "v1", "admin", "users", "{{userId}}", "role"] }
+      }
+    },
+    {
+      "name": "3.7 RBAC: удалить пользователя — DELETE /api/v1/admin/users/{{userId}} (нужен admin)",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('Статус 200', () => pm.response.to.have.status(200));"
+      ] } }],
+      "request": {
+        "method": "DELETE",
+        "description": "Удаляет пользователя {{userId}} (созданного запросом 1.1). Доступно только роли admin.",
+        "header": [],
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }] },
+        "url": { "raw": "{{baseUrl}}/api/v1/admin/users/{{userId}}", "host": ["{{baseUrl}}"], "path": ["api", "v1", "admin", "users", "{{userId}}"] }
+      }
+    }
+  ]
+}

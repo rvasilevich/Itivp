@@ -254,11 +254,51 @@ my-node-app/
 
 ## Тестирование через Postman
 
-Postman → **New Request**, метод и адрес — из таблицы выше. Для `POST` и `PUT`:
+Готовая коллекция со всеми запросами лабораторной №3 (JWT + RBAC) лежит в
+`postman/lab3-auth.postman_collection.json` — токены подставляются автоматически.
+
+Как пользоваться:
+
+1. Postman → **Import** → выбрать `postman/lab3-auth.postman_collection.json`.
+2. Проверить переменную коллекции `baseUrl` (= `http://localhost:3000`) —
+   вкладка **Variables** у коллекции; при необходимости поменять на свой порт.
+3. Запустить сервер (`npm start`) и выполнять запросы **по порядку**:
+   1.1 (регистрация) → 1.2/1.3 (вход: пользователь/админ) → 2.x (защищённые) →
+   3.x (только для роли admin).
+4. Токены из ответов сохраняются скриптами в переменные коллекции
+   (`token`, `adminToken`), поэтому защищённые запросы сразу работают:
+   достаточно выбрать тип авторизации **Bearer Token** → `{{token}}` (или
+   `{{adminToken}}` для админских).
+5. Результаты проверок видны на вкладке **Test Results** каждого запроса.
+
+Запросы коллекции и ожидаемые статусы:
+
+| № | Запрос | Доступ | Ожидаемо |
+|---|--------|--------|----------|
+| 1.1 | `POST /api/v1/auth/register` | все | **201** |
+| 1.2 | `POST /api/v1/auth/login` (обычный пользователь) | все | **200** + token |
+| 1.3 | `POST /api/v1/auth/login` (admin@example.com) | все | **200** + adminToken |
+| 1.4 | `POST /api/v1/auth/login` (неверный пароль) | все | **401** |
+| 2.1 | `GET /api/v1/profile` с токеном | авторизованные | **200** |
+| 2.2 | `GET /api/v1/profile` без токена | — | **401** |
+| 2.3 | `GET /api/v1/profile` с битым токеном | — | **401** |
+| 2.4 | `DELETE /api/v1/profile` | авторизованные | **200** (удаляет свою учётку) |
+| 3.1 | `GET /api/v1/admin/users` с токеном admin | admin | **200** |
+| 3.2 | `GET /api/v1/admin/users` с токеном user | user | **403** |
+| 3.3 | `GET /api/v1/admin/users` без токена | — | **401** |
+| 3.4 | `GET /api/v1/admin/users/:id` | admin | **200** |
+| 3.5 | `PATCH /api/v1/admin/users/:id/role` `{"role":"admin"}` | admin | **200** |
+| 3.6 | `PATCH /api/v1/admin/users/:id/role` `{"role":"superuser"}` | admin | **400** |
+| 3.7 | `DELETE /api/v1/admin/users/:id` | admin | **200** |
+
+Обычные ручные запросы в Postman: метод и адрес — из таблицы выше. Для `POST`,
+`PATCH`, `PUT`:
 
 - вкладка **Body** → **raw** → тип **JSON** (не Text!);
-- в поле ввода — JSON из примера выше;
-- заголовок `Content-Type: application/json` Postman ставит сам при выборе JSON.
+- в поле ввода — JSON из примера;
+- заголовок `Content-Type: application/json` Postman ставит сам при выборе JSON;
+- для защищённых маршрутов — вкладка **Auth** → **Bearer Token** → `{{token}}`
+  (Postman сам добавит заголовок `Authorization: Bearer <token>`).
 
 Postman обращается только к HTTP API приложения (`http://localhost:3000`),
 поэтому о подключении к облачной БД (`sslmode=no-verify`) думать не нужно.

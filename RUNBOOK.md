@@ -416,6 +416,26 @@ curl -X PATCH http://localhost:3000/api/v1/admin/users/2/role \
   -d '{"role":"admin"}'
 ```
 
+### Готовая Postman-коллекция
+
+Все 15 запросов лабораторной (регистрация, вход, защищённые, RBAC, негативные
+кейсы 401/403/400) лежат в `postman/lab3-auth.postman_collection.json`.
+
+```bash
+# импорт: Postman → Import → File → postman/lab3-auth.postman_collection.json
+```
+
+Что внутри:
+
+- переменные коллекции: `baseUrl` (= `http://localhost:3000`), `token`,
+  `adminToken`, `userId`, `email`;
+- скрипты `Tests` автоматически сохраняют токены после входа, поэтому
+  защищённые запросы работают сразу (Auth → Bearer Token → `{{token}}`);
+- запрос 1.1 создаёт пользователя с уникальным email
+  (`tester+{{$timestamp}}@example.com`), поэтому его можно запускать повторно;
+- запросы 2.4 и 3.7 удаляют данные — выполнять осознанно;
+- порядок запуска: 1.1 → 1.2 → 1.3 → 2.x → 3.x.
+
 ### Нюансы
 
 - В JWT лежит `{ id, email, role }` — смена роли действует **после повторного входа**.
@@ -499,6 +519,7 @@ curl -X PATCH http://localhost:3000/api/v1/admin/users/2/role \
 | `pkill -f 'node server.js'` | Остановить фоновый сервер |
 | `npm install jsonwebtoken bcrypt` | Установить зависимости JWT и bcrypt |
 | `npm run check:lab3` | Автопроверка всех задач лабораторной работы №3 (44 проверки) |
+| `postman/lab3-auth.postman_collection.json` | Импортировать в Postman — 15 готовых запросов (JWT + RBAC) |
 | `npx sequelize-cli model:generate --name User --attributes ...` | Создать модель User + миграцию |
 | `curl http://localhost:3000/api/v1/auth/register` | Проверить регистрацию (см. раздел «Аутентификация») |
 | `curl http://localhost:3000/api/v1/employees` | Проверить API (GET список) |
