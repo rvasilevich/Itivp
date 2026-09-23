@@ -140,16 +140,16 @@ npm start            # обычный запуск
 ролью **user** или **admin** (ролевая модель). Регистрация и вход работают на
 **JWT** (токен живёт 1 час) и **bcrypt** (хеширование паролей).
 
-| Метод  | Эндпоинт                        | Доступ            | Описание                                        |
-|--------|---------------------------------|-------------------|-------------------------------------------------|
-| POST   | `/api/v1/auth/register`         | все               | Регистрация (`email`, `password`) → 201         |
-| POST   | `/api/v1/auth/login`            | все               | Вход → `{ token, user }`                        |
-| GET    | `/api/v1/profile`               | авторизованные    | Данные текущего пользователя                    |
-| DELETE | `/api/v1/profile`               | авторизованные    | Удалить свою учётную запись                     |
-| GET    | `/api/v1/admin/users`           | admin             | Список всех пользователей                       |
-| GET    | `/api/v1/admin/users/:id`       | admin             | Пользователь по ID                             |
-| PATCH  | `/api/v1/admin/users/:id/role`  | admin             | Сменить роль (`user`/`admin`)                  |
-| DELETE | `/api/v1/admin/users/:id`       | admin             | Удалить пользователя                            |
+| Метод  | Эндпоинт                        | Доступ            | Body (raw → JSON)                        | Описание                                        |
+|--------|---------------------------------|-------------------|------------------------------------------|-------------------------------------------------|
+| POST   | `/api/v1/auth/register`         | все               | `{"email":"...","password":"..."}`       | Регистрация (`email`, `password`) → 201         |
+| POST   | `/api/v1/auth/login`            | все               | `{"email":"...","password":"..."}`       | Вход → `{ token, user }`                        |
+| GET    | `/api/v1/profile`               | авторизованные    | —                                        | Данные текущего пользователя                    |
+| DELETE | `/api/v1/profile`               | авторизованные    | —                                        | Удалить свою учётную запись                     |
+| GET    | `/api/v1/admin/users`           | admin             | —                                        | Список всех пользователей                       |
+| GET    | `/api/v1/admin/users/:id`       | admin             | —                                        | Пользователь по ID                             |
+| PATCH  | `/api/v1/admin/users/:id/role`  | admin             | `{"role":"user"}` / `{"role":"admin"}`   | Сменить роль (`user`/`admin`)                  |
+| DELETE | `/api/v1/admin/users/:id`       | admin             | —                                        | Удалить пользователя                            |
 
 Авторизация: заголовок `Authorization: Bearer <token>`. Маршруты `/admin`
 дополнительно проверяют роль через middleware `isAdmin`.
