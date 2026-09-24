@@ -483,6 +483,14 @@ curl -X PATCH http://localhost:3000/api/v1/admin/users/2/role \
 Коллекция самоочищается: тестовые пользователи, сотрудники и mongo-документ
 удаляются в конце потока.
 
+**Только MongoDB:** `postman/mongo.postman_collection.json` — 26 запросов лишь по
+`/api/v1/mongo/employees`, 6 папок: подготовка (получить ID), CRUD, вложенные
+структуры (`$push`/позиционный `$`/`$addToSet`/`$inc`/`$pull`), валидация,
+«документ vs таблицы», очистка. **Collection Runner → 26/26 проходят**:
+переменные `mongoId`/`reviewId`/`seedId` заполняются тест-скриптами, созданный
+документ удаляется в 5.1, демо-документ не трогается. Перед прогоном: запущен
+`mongod` и (для запроса 4.1) выполнен `npm run seed:mongo`.
+
 ⚠️ `{{mongoId}}`, `{{employeeId}}`, `{{reviewId}}` — это **переменные Postman**, а не
 «подставь сюда значение». Пока запрос, который их заполняет, не выполнен, переменная
 пустая (URL вида `.../mongo/employees/{{mongoId}}` → 404/список), а запись литерала
@@ -709,6 +717,7 @@ npm run dev               # сервер: в логе должно быть «Mo
 | `npm run check:lab3` | Автопроверка всех задач лабораторной работы №3 (44 проверки) |
 | `postman/lab3-auth.postman_collection.json` | Импортировать в Postman — 15 готовых запросов (JWT + RBAC) |
 | `postman/full-api.postman_collection.json` | Импортировать в Postman — все 34 эндпоинта (auth, employees, profile, admin, MongoDB) с полными путями |
+| `postman/mongo.postman_collection.json` | Импортировать в Postman — 26 запросов только по MongoDB (CRUD, вложенные массивы, валидация), Run collection → 26/26 |
 | `npx sequelize-cli model:generate --name User --attributes ...` | Создать модель User + миграцию |
 | `curl http://localhost:3000/api/v1/auth/register` | Проверить регистрацию (см. раздел «Аутентификация») |
 | `curl http://localhost:3000/api/v1/employees` | Проверить API (GET список) |

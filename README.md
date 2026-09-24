@@ -102,7 +102,12 @@ npm run test       # Vitest: 27 тестов (API замокан)
   (`find / findById / create / findByIdAndUpdate / findByIdAndDelete`) +
   вложенные операции `$push`, `$`, `$pull`, `$addToSet`, `$inc`;
 - **команды:** `npm run seed:mongo` (демо-документ), `npm run check:mongo`
-  (12 проверок), справочник маршрутов — `GET /api/v1`.
+  (12 проверок), справочник маршрутов — `GET /api/v1`;
+- **Postman:** `postman/mongo.postman_collection.json` — отдельная коллекция из
+  26 запросов только по MongoDB (подготовка → CRUD → вложенные структуры →
+  валидация → «документ vs таблицы» → очистка); запускается кнопкой
+  **Run collection**, переменные `mongoId`/`reviewId`/`seedId` подставляются
+  автоматически (прогон: 26/26 зелёных, созданный документ удаляется сам).
 
 Пример документа из коллекции `employees_mongo`:
 
@@ -421,6 +426,13 @@ my-app/
 
 Готовая коллекция со всеми запросами лабораторной №3 (JWT + RBAC) лежит в
 `postman/lab3-auth.postman_collection.json` — токены подставляются автоматически.
+Полный набор по всем эндпоинтам — `postman/full-api.postman_collection.json`
+(34 запроса: auth, employees, profile, admin, MongoDB).
+Только MongoDB (лабораторная по документным БД) —
+`postman/mongo.postman_collection.json`: 26 запросов, порядок «подготовка → CRUD →
+вложенные структуры → валидация → документ vs таблицы → очистка», кнопка
+**Run collection** заполняет `mongoId`/`reviewId`/`seedId` и удаляет тестовый
+документ в конце (прогон 26/26 зелёных).
 
 Как пользоваться:
 

@@ -1,0 +1,837 @@
+{
+  "info": {
+    "name": "MongoDB — Mongoose CRUD + вложенные структуры (employees_mongo)",
+    "description": "Отдельная коллекция ТОЛЬКО для MongoDB.\n\nПОДГОТОВКА: 1) запущен mongod (см. RUNBOOK, раздел «MongoDB (Mongoose)»); 2) в логе сервера при старте есть \"MongoDB connected\"; 3) для наглядности — демо-документ: npm run seed:mongo.\n\nЗАПУСК: кнопка Run collection (Collection Runner) — переменные mongoId/reviewId/seedId заполнятся автоматически, коллекция сама удалит созданный ею документ.\n\nРУЧНОЙ ЗАПУСК: \"{{mongoId}}\" — это переменная Postman (коллекция → Variables), а НЕ «подставь значение». Одиночные запросы по id работают после 0.1/0.3, либо впишите ObjectId руками: mongoId — из ответа 0.3, seedId — из 0.1.\n\nСхема коллекции employees_mongo: name, position, department, email, rating, skills[{name, level}], reviews[{date, reviewer, rating, comment, goals[]}] — вложенные документы хранятся ВНУТРИ сотрудника, без отдельных таблиц и JOIN.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "mongoId",
+      "value": ""
+    },
+    {
+      "key": "reviewId",
+      "value": ""
+    },
+    {
+      "key": "seedId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "0. Подготовка — получить ID для тестов",
+      "item": [
+        {
+          "name": "0.1 GET список — читаем ID для остальных тестов",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://localhost:3000/api/v1/mongo/employees",
+            "description": "Model.find(). Ответ — массив документов; в каждом сразу вложенные skills[] и reviews[]. Сохраняет переменную seedId (id первого документа) — это демо-документ \"Иван Иванов\"."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });",
+                  "const list = pm.response.json();",
+                  "pm.test(\"ответ — массив документов\", function () { pm.expect(list).to.be.an(\"array\"); });",
+                  "if (list.length) { pm.collectionVariables.set(\"seedId\", list[0]._id); }",
+                  "pm.test(\"вложенные массивы есть\", function () { pm.expect(list[0].skills).to.be.an(\"array\"); pm.expect(list[0].reviews).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "0.2 GET с поиском — ?search=Иван ($regex без учёта регистра)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://localhost:3000/api/v1/mongo/employees?search=%D0%98%D0%B2%D0%B0%D0%BD",
+            "description": "Поиск идёт по name, position, department и по ВЛОЖЕННОМУ полю skills.name — в SQL для этого потребовался бы JOIN на таблицу навыков."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });",
+                  "const res = pm.response.json();",
+                  "pm.test(\"поиск вернул массив\", function () { pm.expect(res).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "0.3 POST создать тестовый документ (со вложенными массивами)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://localhost:3000/api/v1/mongo/employees",
+            "description": "Model.create(body): документ сохраняется ЦЕЛИКОМ — вместе с skills[] и reviews[]. MongoDB сама выдаёт _id и сотруднику, и каждому вложенному документу. Сохраняет переменные mongoId и reviewId — с ними работают все дальнейшие запросы.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Тест Постман (Mongo)\",\n  \"position\": \"Аналитик\",\n  \"department\": \"Тест\",\n  \"rating\": 7.5,\n  \"email\": \"mongo.postman@example.com\",\n  \"skills\": [\n    {\n      \"name\": \"SQL\",\n      \"level\": 5\n    }\n  ],\n  \"reviews\": [\n    {\n      \"reviewer\": \"Автотест\",\n      \"rating\": 7,\n      \"comment\": \"Начальный отзыв\",\n      \"goals\": [\n        \"Пройти проверку\"\n      ]\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Статус 201\", function () { pm.response.to.have.status(201); });",
+                  "const d = pm.response.json();",
+                  "pm.collectionVariables.set(\"mongoId\", d._id);",
+                  "pm.collectionVariables.set(\"reviewId\", d.reviews[d.reviews.length - 1]._id);",
+                  "pm.test(\"вложенные массивы сохранены\", function () { pm.expect(d.skills.length).to.eql(1); pm.expect(d.reviews.length).to.eql(1); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "0.4 GET по id — Model.findById(id)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}",
+            "description": "Чтение одного документа по ObjectId. {{mongoId}} — ПЕРЕМЕННАЯ Postman, её заполняет 0.3. Если запустить 0.4 первым, переменная пуста — сначала выполните 0.3 или впишите ObjectId в Variables коллекции."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "0.5 GET несуществующий документ (валидный ObjectId) → 404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://localhost:3000/api/v1/mongo/employees/507f1f77bcf86cd799439011",
+            "description": "Документа нет — 404 \"Сотрудник с ID ... не найден\"."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Статус 404\", function () { pm.response.to.have.status(404); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "0.6 GET некорректный id → 400",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://localhost:3000/api/v1/mongo/employees/not-an-objectid",
+            "description": "Не ObjectId → Mongoose CastError → 400 \"Некорректный ID\". Именно это происходит, если написать в URL {{1}}: Postman отправит литерал {{1}}, а не число."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Статус 400\", function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "1. CRUD (часть 5 задания)",
+      "item": [
+        {
+          "name": "1.1 GET с поиском по email тестового документа",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://localhost:3000/api/v1/mongo/employees?search=mongo.postman",
+            "description": "Проверяем, что созданный документ реально попал в коллекцию."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });",
+                  "const list = pm.response.json();",
+                  "pm.test(\"тестовый документ найден\", function () { pm.expect(list.some(function (d) { return d.email === \"mongo.postman@example.com\"; })).to.be.true; });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.2 PUT частичное обновление — findByIdAndUpdate(id, body, { new: true })",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}",
+            "description": "Передаём только два поля: остальные не затираются, вложенные массивы сохраняются.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"position\": \"Senior-аналитик\",\n  \"rating\": 9.3\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });",
+                  "const d = pm.response.json();",
+                  "pm.test(\"position обновился\", function () { pm.expect(d.position).to.eql(\"Senior-аналитик\"); });",
+                  "pm.test(\"rating обновился\", function () { pm.expect(d.rating).to.eql(9.3); });",
+                  "pm.test(\"вложенные массивы не потерялись\", function () { pm.expect(d.skills.length).to.be.above(0); pm.expect(d.reviews.length).to.be.above(0); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.3 PUT полное обновление (тело как при создании)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}",
+            "description": "Второй вариант update-маршрута (PUT целиком); вложенные массивы при этом не затрагиваются.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Тест Постман (Mongo) v2\",\n  \"position\": \"Ведущий аналитик\",\n  \"department\": \"Тест\",\n  \"rating\": 8.1,\n  \"email\": \"mongo.postman@example.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });",
+                  "const d = pm.response.json();",
+                  "pm.test(\"name обновился\", function () { pm.expect(d.name).to.eql(\"Тест Постман (Mongo) v2\"); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Вложенные структуры (часть 6 задания)",
+      "item": [
+        {
+          "name": "2.1 $push: добавить отзыв в reviews[]",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}/reviews",
+            "description": "Оператор $push добавляет ВЛОЖЕННЫЙ документ внутрь массива reviews[] существующего документа. В реляционной модели это был бы INSERT в отдельную таблицу Reviews с внешним ключом. Сохраняет id нового отзыва в переменную reviewId.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reviewer\": \"Менеджер\",\n  \"rating\": 9,\n  \"comment\": \"Хорошая работа\",\n  \"goals\": [\n    \"Повысить до senior\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Статус 201\", function () { pm.response.to.have.status(201); });",
+                  "const d = pm.response.json();",
+                  "pm.collectionVariables.set(\"reviewId\", d.reviews[d.reviews.length - 1]._id);",
+                  "pm.test(\"отзывов стало 2\", function () { pm.expect(d.reviews.length).to.eql(2); });",
+                  "pm.test(\"у отзыва есть массив целей goals[]\", function () { pm.expect(d.reviews[1].goals).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.2 PUT отзыв — позиционный оператор $ (правка ВНУТРИ массива)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}/reviews/{{reviewId}}",
+            "description": "Обновляется только выбранный элемент массива: findOneAndUpdate с условием {\"reviews._id\": reviewId} и $set по \"reviews.$.rating\". Аналог UPDATE ... WHERE id = ... в реляционной модели, но без отдельной таблицы.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comment\": \"Обновлённый комментарий\",\n  \"rating\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });",
+                  "const d = pm.response.json();",
+                  "const rev = d.reviews[d.reviews.length - 1];",
+                  "pm.test(\"rating отзыва изменён на 10\", function () { pm.expect(rev.rating).to.eql(10); });",
+                  "pm.test(\"комментарий изменён\", function () { pm.expect(rev.comment).to.eql(\"Обновлённый комментарий\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.3 PUT несуществующий отзыв → 404",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}/reviews/507f1f77bcf86cd799439011",
+            "description": "Сотрудник есть, отзыва с таким _id нет → 404 \"Отзыв с ID ... не найден\".",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comment\": \"x\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Статус 404\", function () { pm.response.to.have.status(404); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.4 $addToSet: добавить навык Kubernetes",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}/skills",
+            "description": "$addToSet добавляет элемент в массив skills[], но не создаёт дубликатов (перед вставкой сервер проверяет навык по имени).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Kubernetes\",\n  \"level\": 3\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Статус 201\", function () { pm.response.to.have.status(201); });",
+                  "const d = pm.response.json();",
+                  "pm.test(\"навык Kubernetes добавлен\", function () { pm.expect(d.skills.map(function (s) { return s.name; })).to.include(\"Kubernetes\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.5 $addToSet повторно (дубль навыка) → 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}/skills",
+            "description": "Негативный кейс: такой навык уже есть → 409 \"Навык ... уже добавлен\". Запускать после 2.4.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Kubernetes\",\n  \"level\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Статус 409\", function () { pm.response.to.have.status(409); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.6 $inc + позиционный $: +2 к уровню SQL",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}/skills/SQL",
+            "description": "Главная демонстрация задания: обновление ЭЛЕМЕНТА МАССИВА — $inc по \"skills.$.level\" (SQL 5 → 7). Это ровно тот случай «увеличить количество товара в корзине»: в SQL — UPDATE по строке таблицы, здесь — оператор внутри документа.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });",
+                  "const d = pm.response.json();",
+                  "const sql = d.skills.filter(function (s) { return s.name === \"SQL\"; })[0];",
+                  "pm.test(\"уровень SQL увеличился на 2 (5 → 7)\", function () { pm.expect(sql.level).to.eql(7); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.7 PATCH несуществующий навык → 404",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}/skills/COBOL",
+            "description": "Навыка нет в массиве → 404 \"Навык \\\"COBOL\\\" не найден\".",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Статус 404\", function () { pm.response.to.have.status(404); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.8 PATCH amount = 0 → 400",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}/skills/SQL",
+            "description": "Валидация: amount — ненулевое целое (иначе уровень не изменится).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Статус 400\", function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.9 $pull: удалить вложенный отзыв",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}/reviews/{{reviewId}}",
+            "description": "$pull удаляет элемент массива по _id вложенного документа — аналог DELETE по строке в отдельной таблице отзывов."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });",
+                  "const d = pm.response.json().employee;",
+                  "pm.test(\"отзывов снова 1\", function () { pm.expect(d.reviews.length).to.eql(1); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Валидация и негативные кейсы",
+      "item": [
+        {
+          "name": "3.1 POST без name → 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://localhost:3000/api/v1/mongo/employees",
+            "description": "Схема Mongoose: name — required. Ошибка валидации превращается в 400 с деталями.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"position\": \"Без имени\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Статус 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"в ответе есть details\", function () { pm.expect(pm.response.json().details).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3.2 POST reviews без reviewer → 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}/reviews",
+            "description": "Вложенный документ отзыва валидируется отдельно: reviewer обязателен.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": 9\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Статус 400\", function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3.3 POST reviews с rating = 25 → 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}/reviews",
+            "description": "Диапазон оценки: 1..10 (и в схеме, и в ручной проверке маршрута).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reviewer\": \"Менеджер\",\n  \"rating\": 25\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Статус 400\", function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3.4 POST skills с level = 11 → 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}/skills",
+            "description": "Уровень навыка — целое 1..10.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Go\",\n  \"level\": 11\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Статус 400\", function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3.5 POST reviews для несуществующего сотрудника → 404",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://localhost:3000/api/v1/mongo/employees/507f1f77bcf86cd799439011/reviews",
+            "description": "Сначала проверяется существование родительского документа, потом вложенного.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reviewer\": \"Менеджер\",\n  \"rating\": 9\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Статус 404\", function () { pm.response.to.have.status(404); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Документ vs таблицы (демонстрация)",
+      "item": [
+        {
+          "name": "4.1 GET демо-документа: сотрудник + навыки + отзывы ОДНИМ запросом",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://localhost:3000/api/v1/mongo/employees/{{seedId}}",
+            "description": "Демонстрация отличия от реляционной модели: в PostgreSQL это был бы SELECT сотрудника плюс два JOIN (навыки, отзывы) либо три запроса; здесь весь агрегат приходит одним документом, а вложенные массивы видны прямо в ответе. Переменная seedId заполняется в 0.1 (демо-документ \"Иван Иванов\")."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });",
+                  "const d = pm.response.json();",
+                  "pm.test(\"skills[] и reviews[] непустые\", function () { pm.expect(d.skills.length).to.be.above(0); pm.expect(d.reviews.length).to.be.above(0); });",
+                  "pm.test(\"у вложенных документов свой _id\", function () { pm.expect(d.reviews[0]._id).to.be.a(\"string\"); pm.expect(d.skills[0]._id).to.be.a(\"string\"); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Очистка",
+      "item": [
+        {
+          "name": "5.1 DELETE тестовый документ — Model.findByIdAndDelete(id)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}",
+            "description": "Удаляется ТОЛЬКО тестовый документ, созданный в 0.3 (демо-документ \"Иван Иванов\" не затрагивается)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5.2 Контрольный GET: тестового документа больше нет",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://localhost:3000/api/v1/mongo/employees",
+            "description": "Проверяем, что в коллекции остались только «настоящие» документы."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });",
+                  "const list = pm.response.json();",
+                  "const id = pm.collectionVariables.get(\"mongoId\");",
+                  "pm.test(\"удалённого документа нет в списке\", function () { pm.expect(list.some(function (d) { return d._id === id; })).to.be.false; });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
