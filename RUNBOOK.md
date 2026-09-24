@@ -472,6 +472,17 @@ curl -X PATCH http://localhost:3000/api/v1/admin/users/2/role \
 
 Базовый адрес: `http://localhost:3000/api/v1`
 
+**Полная коллекция «все эндпоинты сразу»:**
+`postman/full-api.postman_collection.json` — 34 запроса с **полными путями**
+(`http://localhost:3000/api/v1/...`), raw-телами и ожидаемыми статусами.
+Импорт: Postman → Import → File → `postman/full-api.postman_collection.json`.
+Порядок важен: сначала 1.1–1.4 (регистрация/вход сохраняют переменные
+`token` и `adminToken`), запросы 2.x/3.x/4.x/5.x выполняются с подстановкой
+`{{token}}`, `{{adminToken}}`, `{{employeeId}}`, `{{mongoId}}` и т.д.
+Для раздела 5 (MongoDB) должен быть запущен mongod (раздел «MongoDB (Mongoose)»).
+Коллекция самоочищается: тестовые пользователи, сотрудники и mongo-документ
+удаляются в конце потока.
+
 | Метод | URL | Тело (Body → raw → JSON) | Ожидаемый ответ |
 |-------|-----|--------------------------|-----------------|
 | GET | `http://localhost:3000/api/v1/employees` | — | 200, массив сотрудников |
@@ -688,6 +699,7 @@ npm run dev               # сервер: в логе должно быть «Mo
 | `npm install jsonwebtoken bcrypt` | Установить зависимости JWT и bcrypt |
 | `npm run check:lab3` | Автопроверка всех задач лабораторной работы №3 (44 проверки) |
 | `postman/lab3-auth.postman_collection.json` | Импортировать в Postman — 15 готовых запросов (JWT + RBAC) |
+| `postman/full-api.postman_collection.json` | Импортировать в Postman — все 34 эндпоинта (auth, employees, profile, admin, MongoDB) с полными путями |
 | `npx sequelize-cli model:generate --name User --attributes ...` | Создать модель User + миграцию |
 | `curl http://localhost:3000/api/v1/auth/register` | Проверить регистрацию (см. раздел «Аутентификация») |
 | `curl http://localhost:3000/api/v1/employees` | Проверить API (GET список) |

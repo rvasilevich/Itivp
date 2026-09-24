@@ -1,0 +1,991 @@
+{
+  "info": {
+    "name": "Полное API — Employees + Auth + Profile + Admin + MongoDB (my-node-app)",
+    "description": "Все эндпоинты с полными путями. Порядок важен: сначала 1.1–1.4 (регистрация/вход сохраняют token и adminToken), затем остальные. Для раздела 5 нужен запущенный mongod (см. RUNBOOK).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "adminToken",
+      "value": ""
+    },
+    {
+      "key": "userId",
+      "value": ""
+    },
+    {
+      "key": "sacrificeId",
+      "value": ""
+    },
+    {
+      "key": "employeeId",
+      "value": ""
+    },
+    {
+      "key": "mongoId",
+      "value": ""
+    },
+    {
+      "key": "reviewId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "0.1 Справочник эндпоинтов — GET /api/v1",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "http://localhost:3000/api/v1"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "1.1 Регистрация demo-пользователя — POST /api/v1/auth/register",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "http://localhost:3000/api/v1/auth/register",
+        "description": "Сохраняет userId, userEmail. Email должен быть уникален (иначе 409).",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"demo.user2@example.com\",\n  \"password\": \"secret12\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 201\", function () { pm.response.to.have.status(201); });",
+              "pm.collectionVariables.set('userId', pm.response.json().id);",
+              "pm.collectionVariables.set('userEmail', pm.response.json().email);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "1.2 Регистрация пользователя под удаление — POST /api/v1/auth/register",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "http://localhost:3000/api/v1/auth/register",
+        "description": "Сохраняет sacrificeId — удалится в запросе 4.6.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"demo.sacrifice@example.com\",\n  \"password\": \"secret12\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 201\", function () { pm.response.to.have.status(201); });",
+              "pm.collectionVariables.set('sacrificeId', pm.response.json().id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "1.3 Вход (пользователь) — POST /api/v1/auth/login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "http://localhost:3000/api/v1/auth/login",
+        "description": "Сохраняет token — подставляется в Bearer {{token}}.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"demo.user2@example.com\",\n  \"password\": \"secret12\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });",
+              "pm.collectionVariables.set('token', pm.response.json().token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "1.4 Вход (администратор) — POST /api/v1/auth/login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "http://localhost:3000/api/v1/auth/login",
+        "description": "Сохраняет adminToken (JWT живёт 1 час).",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"Admin123!\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });",
+              "pm.collectionVariables.set('adminToken', pm.response.json().token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "1.5 Неверный пароль — POST /api/v1/auth/login (ожидаем 401)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "http://localhost:3000/api/v1/auth/login",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"wrong-password\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 401\", function () { pm.response.to.have.status(401); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2.1 CREATE — POST /api/v1/employees",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "http://localhost:3000/api/v1/employees",
+        "description": "Сохраняет employeeId. Все поля обязательны кроме email; rating 1..10.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Тест Постман\",\n  \"position\": \"Разработчик\",\n  \"department\": \"IT\",\n  \"rating\": 8.2,\n  \"reviewDate\": \"2026-09-24\",\n  \"email\": \"test.postman@example.com\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 201\", function () { pm.response.to.have.status(201); });",
+              "pm.collectionVariables.set('employeeId', pm.response.json().id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2.2 READ список — GET /api/v1/employees",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "http://localhost:3000/api/v1/employees"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2.3 READ с поиском — GET /api/v1/employees?search=ит",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "http://localhost:3000/api/v1/employees?search=%D0%B8%D1%82",
+        "description": "Серверный ILIKE-поиск по ФИО/должности/отделу/email, регистронезависимо."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2.4 READ по id — GET /api/v1/employees/{employeeId}",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "http://localhost:3000/api/v1/employees/{{employeeId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2.5 UPDATE — PUT /api/v1/employees/{employeeId}",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "http://localhost:3000/api/v1/employees/{{employeeId}}",
+        "description": "PUT — полное обновление (тело как при создании).",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Тест Постман v2\",\n  \"position\": \"Senior\",\n  \"department\": \"IT\",\n  \"rating\": 9.1,\n  \"reviewDate\": \"2026-09-24\",\n  \"email\": \"test.postman@example.com\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2.6 DELETE — DELETE /api/v1/employees/{employeeId}",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": "http://localhost:3000/api/v1/employees/{{employeeId}}",
+        "description": "После удаления GET по этому id → 404."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3.1 ЗАЩИЩЁННЫЙ: профиль — GET /api/v1/profile",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "http://localhost:3000/api/v1/profile"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3.2 БЕЗ токена — GET /api/v1/profile (ожидаем 401)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "http://localhost:3000/api/v1/profile"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 401\", function () { pm.response.to.have.status(401); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3.3 Обновить свои данные — PUT /api/v1/profile",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "http://localhost:3000/api/v1/profile",
+        "description": "Сохраняется в БД. Дальше вход: demo.user2.updated@example.com / secret123. Можно передать только email или только password (мин. 6 символов).",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"demo.user2.updated@example.com\",\n  \"password\": \"secret123\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.1 ADMIN: список пользователей — GET /api/v1/admin/users",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ],
+        "url": "http://localhost:3000/api/v1/admin/users"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.2 ADMIN: пользователь по id — GET /api/v1/admin/users/{sacrificeId}",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ],
+        "url": "http://localhost:3000/api/v1/admin/users/{{sacrificeId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.3 ADMIN: выдать роль admin — PATCH /api/v1/admin/users/{sacrificeId}/role",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "http://localhost:3000/api/v1/admin/users/{{sacrificeId}}/role",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"role\": \"admin\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.4 Вернуть роль user — PATCH /api/v1/admin/users/{sacrificeId}/role",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "http://localhost:3000/api/v1/admin/users/{{sacrificeId}}/role",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"role\": \"user\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.5 RBAC: пользователь на /admin → 403 — GET /api/v1/admin/users",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "http://localhost:3000/api/v1/admin/users",
+        "description": "Токен роли user: доступ запрещён."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 403\", function () { pm.response.to.have.status(403); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.6 ADMIN: удалить пользователя — DELETE /api/v1/admin/users/{sacrificeId}",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ],
+        "url": "http://localhost:3000/api/v1/admin/users/{{sacrificeId}}",
+        "description": "Очистка demo.sacrifice@example.com."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5.1 MongoDB: список — GET /api/v1/mongo/employees",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "http://localhost:3000/api/v1/mongo/employees"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5.2 MongoDB: поиск — GET /api/v1/mongo/employees?search=Иван",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "http://localhost:3000/api/v1/mongo/employees?search=%D0%98%D0%B2%D0%B0%D0%BD",
+        "description": "$regex без учёта регистра; находит демо-документ из npm run seed:mongo."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5.3 MongoDB: CREATE со вложенными массивами — POST /api/v1/mongo/employees",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "http://localhost:3000/api/v1/mongo/employees",
+        "description": "Сохраняет mongoId. В документ сразу попадают skills[] и reviews[].",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Тест Постман (Mongo)\",\n  \"position\": \"Аналитик\",\n  \"department\": \"Тест\",\n  \"rating\": 7.5,\n  \"email\": \"mongo.postman@example.com\",\n  \"skills\": [\n    {\n      \"name\": \"SQL\",\n      \"level\": 5\n    }\n  ],\n  \"reviews\": [\n    {\n      \"reviewer\": \"Автотест\",\n      \"rating\": 7,\n      \"comment\": \"Начальный отзыв\",\n      \"goals\": [\n        \"Пройти проверку\"\n      ]\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 201\", function () { pm.response.to.have.status(201); });",
+              "pm.collectionVariables.set('mongoId', pm.response.json()._id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5.4 MongoDB: READ по id — GET /api/v1/mongo/employees/{mongoId}",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5.5 MongoDB: UPDATE (частичный) — PUT /api/v1/mongo/employees/{mongoId}",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}",
+        "description": "findByIdAndUpdate: меняются только переданные поля.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Тест Постман (Mongo) v2\",\n  \"rating\": 8.5\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5.6 Вложенность $push: отзыв — POST /api/v1/mongo/employees/{mongoId}/reviews",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}/reviews",
+        "description": "Сохраняет reviewId. Оператор $push добавляет вложенный документ в reviews[].",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"reviewer\": \"Менеджер\",\n  \"rating\": 9,\n  \"comment\": \"Хорошая работа\",\n  \"goals\": [\n    \"Повысить до senior\"\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 201\", function () { pm.response.to.have.status(201); });",
+              "var revs = pm.response.json().reviews; pm.collectionVariables.set('reviewId', revs[revs.length - 1]._id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5.7 Оператор $: изменить отзыв — PUT /api/v1/mongo/employees/{mongoId}/reviews/{reviewId}",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}/reviews/{{reviewId}}",
+        "description": "Правит конкретный элемент массива (позиционный оператор $).",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"comment\": \"Обновлённый комментарий\",\n  \"rating\": 10\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5.8 $addToSet: добавить навык — POST /api/v1/mongo/employees/{mongoId}/skills",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}/skills",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Docker\",\n  \"level\": 3\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 201\", function () { pm.response.to.have.status(201); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5.9 Дубль навыка → 409 — POST /api/v1/mongo/employees/{mongoId}/skills",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}/skills",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Docker\",\n  \"level\": 5\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 409\", function () { pm.response.to.have.status(409); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5.10 $inc: +2 к уровню SQL — PATCH /api/v1/mongo/employees/{mongoId}/skills/SQL",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}/skills/SQL",
+        "description": "Аналог «увеличить количество в корзине»: $inc + позиционный $ (SQL: 5 → 7).",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"amount\": 2\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5.11 $pull: удалить отзыв — DELETE /api/v1/mongo/employees/{mongoId}/reviews/{reviewId}",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}/reviews/{{reviewId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5.12 MongoDB: DELETE документ — DELETE /api/v1/mongo/employees/{mongoId}",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6.1 Удалить свою учётку — DELETE /api/v1/profile (последним!)",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "http://localhost:3000/api/v1/profile",
+        "description": "Удаляет demo-пользователя (JWT перестаёт действовать). После этого повторите 1.1–1.3 для новых проверок."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Статус 200\", function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
