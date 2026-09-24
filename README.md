@@ -100,7 +100,9 @@ npm run test       # Vitest: 27 тестов (API замокан)
   ещё массив целей `goals[]`) и `skills[]` (навык + уровень);
 - **маршруты:** `/api/v1/mongo/employees` — CRUD методами Mongoose
   (`find / findById / create / findByIdAndUpdate / findByIdAndDelete`) +
-  вложенные операции `$push`, `$`, `$pull`, `$addToSet`, `$inc`;
+  вложенные операции `$push`, `$`, `$pull`, `$addToSet`, `$inc`; список
+  поддерживает `?search=` (`$regex` без учёта регистра по ФИО, должности,
+  отделу, email и названию навыка `skills.name`);
 - **команды:** `npm run seed:mongo` (демо-документ), `npm run check:mongo`
   (12 проверок), справочник маршрутов — `GET /api/v1`;
 - **Postman:** `postman/mongo.postman_collection.json` — отдельная коллекция из

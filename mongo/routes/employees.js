@@ -32,6 +32,8 @@ const notFound = (id) => new AppError(404, `Сотрудник с ID ${id} не 
 // ---------- CRUD через методы Mongoose (Часть 5) ----------
 
 // GET /api/v1/mongo/employees — Model.find(); ?search= — $regex без учёта регистра
+// Ищем по ФИО, должности, отделу, email и названию вложенного навыка (skills.name) —
+// тот же набор полей, что и в реляционном поиске (repositories/employeeRepository.js).
 router.get('/', wrap(async (req, res) => {
   const search = (req.query.search || '').trim();
   const filter = search
@@ -40,6 +42,7 @@ router.get('/', wrap(async (req, res) => {
           { name: { $regex: search, $options: 'i' } },
           { position: { $regex: search, $options: 'i' } },
           { department: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } },
           { 'skills.name': { $regex: search, $options: 'i' } },
         ],
       }

@@ -627,7 +627,7 @@ mongod --dbpath ~/mongodb-data --port 27017 --bind_ip 127.0.0.1 \
 
 | Маршрут | Что делает |
 |---------|-----------|
-| `GET /api/v1/mongo/employees` | список (`find`), `?search=` — `$regex` без учёта регистра |
+| `GET /api/v1/mongo/employees` | список (`find`), `?search=` — `$regex` без учёта регистра по ФИО, должности, отделу, email и `skills.name` |
 | `GET /api/v1/mongo/employees/:id` | сотрудник (`findById`) |
 | `POST /api/v1/mongo/employees` | создать документ, в т.ч. со `skills[]`/`reviews[]` (`create`) |
 | `PUT /api/v1/mongo/employees/:id` | обновить документ (`findByIdAndUpdate`) |
