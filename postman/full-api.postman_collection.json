@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Полное API — Employees + Auth + Profile + Admin + MongoDB (my-node-app)",
-    "description": "Все эндпоинты с полными путями. Порядок важен: сначала 1.1–1.4 (регистрация/вход сохраняют token и adminToken), затем остальные. Для раздела 5 нужен запущенный mongod (см. RUNBOOK).",
+    "description": "Все эндпоинты с полными путями. ВАЖНО: \"{{имя}}\" — это переменная Postman, значение берётся из Variables коллекции (или из тест-скриптов предыдущих запросов), НЕ пишите вместо неё цифру или произвольный текст. Порядок важен: сначала 1.1–1.4 (регистрация/вход сохраняют token и adminToken), затем 2.x (сохраняет employeeId), 3.x, 4.x, 5.x (5.3 сохраняет mongoId, 5.6 — reviewId). Запускать лучше через Collection Runner (Run collection), тогда переменные подставляются автоматически. Для раздела 5 нужен запущенный mongod (см. RUNBOOK). Для ручного запуска одного запроса 5.4+ задайте mongoId: Postman → коллекция → Variables → mongoId (ObjectId можно взять из ответа 5.1).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -707,7 +707,8 @@
       "request": {
         "method": "GET",
         "header": [],
-        "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}"
+        "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}",
+        "description": "Переменная {{mongoId}} заполняется автоматически в запросе 5.3 — запустите его первым. Для одиночного запуска: скопируйте \"_id\" из ответа 5.1 и вставьте в Variables → mongoId. Запись {{1}} или {{mongoId}} «как есть» в URL не сработает: \"{{...}}\" — это переменная Postman."
       },
       "event": [
         {
@@ -732,7 +733,7 @@
           }
         ],
         "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}",
-        "description": "findByIdAndUpdate: меняются только переданные поля.",
+        "description": "findByIdAndUpdate: меняются только переданные поля. Требует mongoId (см. 5.3).",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"name\": \"Тест Постман (Mongo) v2\",\n  \"rating\": 8.5\n}",
@@ -766,7 +767,7 @@
           }
         ],
         "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}/reviews",
-        "description": "Сохраняет reviewId. Оператор $push добавляет вложенный документ в reviews[].",
+        "description": "Сохраняет reviewId. Оператор $push добавляет вложенный документ в reviews[]. Требует mongoId.",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"reviewer\": \"Менеджер\",\n  \"rating\": 9,\n  \"comment\": \"Хорошая работа\",\n  \"goals\": [\n    \"Повысить до senior\"\n  ]\n}",
@@ -801,7 +802,7 @@
           }
         ],
         "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}/reviews/{{reviewId}}",
-        "description": "Правит конкретный элемент массива (позиционный оператор $).",
+        "description": "Правит конкретный элемент массива (позиционный оператор $). Требует mongoId и reviewId (из 5.6).",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"comment\": \"Обновлённый комментарий\",\n  \"rating\": 10\n}",
@@ -843,7 +844,8 @@
               "language": "json"
             }
           }
-        }
+        },
+        "description": "Добавляет навык Docker ($addToSet). Требует mongoId."
       },
       "event": [
         {
@@ -876,7 +878,8 @@
               "language": "json"
             }
           }
-        }
+        },
+        "description": "Негативный кейс: повторный POST того же навыка → 409. Сначала должен пройти 5.8 (иначе будет 201 с новым навыком)."
       },
       "event": [
         {
@@ -901,7 +904,7 @@
           }
         ],
         "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}/skills/SQL",
-        "description": "Аналог «увеличить количество в корзине»: $inc + позиционный $ (SQL: 5 → 7).",
+        "description": "Аналог «увеличить количество в корзине»: $inc + позиционный $ (уровень SQL 5 → 7). Требует mongoId.",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"amount\": 2\n}",
@@ -929,7 +932,8 @@
       "request": {
         "method": "DELETE",
         "header": [],
-        "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}/reviews/{{reviewId}}"
+        "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}/reviews/{{reviewId}}",
+        "description": "Убирает вложенный отзыв ($pull). Требует mongoId и reviewId (из 5.6)."
       },
       "event": [
         {
@@ -948,7 +952,8 @@
       "request": {
         "method": "DELETE",
         "header": [],
-        "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}"
+        "url": "http://localhost:3000/api/v1/mongo/employees/{{mongoId}}",
+        "description": "Требует mongoId. Если 5.3 не запускался, переменная пустая и удалять нечего — проверьте, что удаляете именно тестовый документ, а не демо-документ из npm run seed:mongo."
       },
       "event": [
         {
