@@ -26,14 +26,16 @@ REST API для управления оценкой эффективности �
 - Express.js (в т.ч. middleware `cors` — CORS для фронтенда)
 - Sequelize (ORM) + PostgreSQL
 - Mongoose (ODM) + MongoDB — документное хранилище с вложенными структурами
+- Socket.IO — обмен сообщениями в реальном времени (чат с комнатами, ЛР №7)
 - JSON Web Token (jsonwebtoken)
 - bcrypt (хеширование паролей)
 - Nodemon (для разработки)
 
-Фронтенд (`my-app/`, лабораторные работы №4–№5):
+Фронтенд (`my-app/`, лабораторные работы №4–№7):
 
 - React 19 + Vite
 - axios (HTTP-клиент, REST API)
+- socket.io-client (WebSocket-клиент чата, ЛР №7)
 - Vitest + Testing Library (тесты с моком API)
 
 ## Ветки и лабораторные работы
@@ -46,9 +48,11 @@ REST API для управления оценкой эффективности �
 | `lab24` | №4 | React-приложение `my-app`: список на `useState`/`useEffect` + `localStorage` |
 | `lab25` | №5 | Интеграция React ↔ REST API (axios): GET с loading/error, оптимистичный CRUD, поиск с debounce |
 | `lab26` | №6 | MongoDB + Mongoose: вложенные структуры, CRUD-маршруты, Postman-коллекция |
+| `lab27` | №7 | Чат в реальном времени (Socket.IO): комнаты, история в MongoDB, typing, приватные сообщения, реакции |
 
 Каждая лабораторная лежит только в своей ветке: `lab24` — без функционала №5,
-`lab25` — без MongoDB, `lab26` — самая полная (фронтенд + реляционное API + документное хранилище).
+`lab25` — без MongoDB, `lab26` — без Socket.IO, `lab27` — самая полная
+(фронтенд + реляционное API + документное хранилище + реальное время).
 
 
 ## Фронтенд (ЛР №4–№5)
@@ -99,7 +103,7 @@ REST API для управления оценкой эффективности �
 cd my-app
 npm install        # зависимости, в т.ч. axios
 npm run dev        # http://localhost:5173 (сервер должен работать на :3000)
-npm run test       # Vitest: 27 тестов (API замокан)
+npm run test       # Vitest: 43 теста (API и Socket.IO замоканы)
 ```
 
 ## MongoDB (Mongoose): документное хранилище
@@ -160,6 +164,51 @@ npm run test       # Vitest: 27 тестов (API замокан)
 | добавить отзыв = `INSERT` в другую таблицу | `POST .../reviews` → `$push` по массиву |
 | изменить уровень навыка = `UPDATE` по id строки | `PATCH .../skills/:name` → `$inc` + позиционный `$` |
 | правки структуры = миграции (`sequelize-cli`) | схема гибкая, документ самодокументирован |
+
+## Чат в реальном времени (Socket.IO): ЛР №7
+
+Тот же сервер Express (`server.js`) обслуживает **и REST API, и Socket.IO** —
+`http.createServer(app)` + `createSocketServer(server)` на одном порту `3000`,
+поэтому клиент подключается к `http://localhost:3000` **без** префикса `/api/v1`.
+
+**Серверная часть (`socket/`):**
+
+- `socket/index.js` — обработчики событий: вход в канал (`room:join` → ack с
+  историей), сообщения (`chat:message`), «печатает…» (`chat:typing`),
+  приватные сообщения (`chat:private` по `socket.id`), реакции
+  (`chat:react` → `$push`/`$addToSet`/`$pull` во **вложенном массиве**
+  `reactions[]` документа сообщения);
+- `socket/rooms.js` — каналы предметной области: общий + по отделам
+  (комнаты Socket.IO, изоляция сообщений);
+- `socket/presence.js` — «кто онлайн» (уведомления о подключении/отключении,
+  событие `presence:list`);
+- `socket/auth.js` — аутентификация соединения **JWT из ЛР №3**: токен приходит
+  в `handshake.auth.token` (заголовки в WebSocket недоступны), битый/просроченный
+  токен → `connect_error`;
+- `mongo/models/message.js` — история канала в коллекции `messages_mongo`
+  (автор, текст, вложенные `reactions[]`).
+
+**Клиентская часть (`my-app/src/`):**
+
+- `src/socket.js` — `createSocket()` (JWT в `auth`), карта событий `SOCKET_EVENTS`,
+  адрес из `VITE_SOCKET_URL`;
+- `src/components/ChatRoom.jsx` — вкладка «Чат»: каналы с числом онлайн,
+  лента сообщений (история из MongoDB при входе в канал), индикатор «печатает…»,
+  приватные сообщения, реакции-голосования, лента системных уведомлений;
+  **доп. эффект:** `document.title` показывает число пользователей онлайн;
+  при размонтировании сокет отключается (`removeAllListeners` + `disconnect`).
+
+**Проверка:**
+
+```bash
+npm install socket.io            # сервер (уже в package.json)
+cd my-app && npm install         # клиент: socket.io-client (уже в package.json)
+npm run check:socket             # самопроверка: 39 проверок (сервер поднимается сам)
+```
+
+Демонстрация: `npm run dev` + `cd my-app && npm run dev`, открыть **два окна**
+(или разные браузеры), войти и переключаться между каналами — сообщения,
+уведомления о подключении/отключении и «печатает…» появляются в реальном времени.
 
 ## Установка и настройка
 
@@ -241,7 +290,7 @@ npm install                 # установить зависимости (в т
 # создайте my-app/.env (см. .env.example):
 #   VITE_API_URL=http://localhost:3000/api/v1
 npm run dev                 # Vite dev-сервер на http://localhost:5173
-npm run test                # vitest — 27 тестов (мок API)
+npm run test                # vitest — 43 теста (мок API и Socket.IO)
 npm run lint                # oxlint — 0 warnings
 npm run build               # production-сборка в my-app/dist
 ```
@@ -361,7 +410,13 @@ my-node-app/
 │   └── isAdmin.js              # RBAC: доступ только для роли admin
 ├── mongo/                      # Mongoose (MongoDB): документное хранилище
 │   ├── models/employee.js      # Схема: вложенные reviews[] и skills[]
+│   ├── models/message.js       # Сообщения чата: вложенные reactions[] (ЛР №7)
 │   └── routes/employees.js     # CRUD + $push / $ / $pull / $addToSet / $inc
+├── socket/                     # Socket.IO: чат в реальном времени (ЛР №7)
+│   ├── index.js                # Сервер: события, комнаты, presence, реакции
+│   ├── auth.js                 # Аутентификация соединения по JWT
+│   ├── rooms.js                # Каналы предметной области (комнаты)
+│   └── presence.js             # Хранилище «кто онлайн»
 ├── migrations/                 # Миграции базы данных
 ├── models/                     # Модели данных (Sequelize)
 │   ├── employee.js             # Модель сотрудника
@@ -386,21 +441,25 @@ my-node-app/
 └── README.md
 ```
 
-Фронтенд (лабораторные работы №4–№5) — отдельное Vite + React SPA в `my-app/`:
+Фронтенд (лабораторные работы №4–№7) — отдельное Vite + React SPA в `my-app/`:
 
 ```
 my-app/
-├── .env                        # VITE_API_URL (не в git), шаблон — .env.example
+├── .env                        # VITE_API_URL и VITE_SOCKET_URL (не в git), шаблон — .env.example
 ├── src/
 │   ├── api.js                  # axios-клиент (JWT-перехватчик, CRUD + auth/profile)
+│   ├── socket.js               # Socket.IO-клиент: JWT в handshake, карта событий
+│   ├── socket.test.js          # тесты рукопожатия (auth с JWT)
 │   ├── session.js              # сессия в localStorage (token, user)
-│   ├── App.jsx                 # вход → проверка токена → вкладки по роли
+│   ├── App.jsx                 # вход → проверка токена → вкладки по роли (+ «Чат»)
 │   ├── App.test.jsx            # тесты ролей (admin/user, logout, 401)
 │   ├── components/
 │   │   ├── AuthPage.jsx        # вход / регистрация (первая страница)
 │   │   ├── AuthPage.test.jsx
 │   │   ├── EmployeeList.jsx    # список: GET/POST/PUT/DELETE, loading/error, поиск
 │   │   ├── EmployeeList.test.jsx
+│   │   ├── ChatRoom.jsx        # чат Socket.IO: комнаты, история, typing, реакции
+│   │   ├── ChatRoom.test.jsx   # 13 тестов с фейковым сокетом
 │   │   ├── Profile.jsx         # профиль: GET/PUT /profile (сохранение в БД)
 │   │   └── Profile.test.jsx
 │   └── data/demoEmployees.js   # эталонная структура объекта Employee

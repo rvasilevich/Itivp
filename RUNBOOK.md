@@ -29,8 +29,9 @@
 12. [Аутентификация: JWT + RBAC](#аутентификация-jwt--rbac)
 13. [Фронтенд (my-app, Vite + React)](#фронтенд-my-app-vite--react)
 14. [MongoDB (Mongoose)](#mongodb-mongoose)
-15. [Известные нюансы](#известные-нюансы)
-16. [Сводная таблица команд](#сводная-таблица-команд)
+15. [Чат в реальном времени (Socket.IO)](#чат-в-реальном-времени-socketio)
+16. [Известные нюансы](#известные-нюансы)
+17. [Сводная таблица команд](#сводная-таблица-команд)
 
 ---
 
@@ -54,11 +55,13 @@
 | `lab23` | №3 | Аутентификация JWT + RBAC, справочник `GET /api/v1` | `570b033` |
 | `lab24` | №4 | React `my-app`: список сотрудников на `useState`/`useEffect` + `localStorage` | `d933e78` |
 | `lab25` | №5 | React ↔ свой REST API (axios): GET с loading/error и «Повторить», оптимистичные POST/DELETE/PUT, поиск с debounce, `AbortController`; экраны входа/профиля | `69f7ffb` |
-| `lab26` | №6 | MongoDB + Mongoose: вложенные `skills[]`/`reviews[]`, CRUD-маршруты, Postman-коллекция | `783b009` |
+| `lab26` | №6 | MongoDB + Mongoose: вложенные `skills[]`/`reviews[]`, CRUD-маршруты, Postman-коллекция | `2e5a233` |
+| `lab27` | №7 | Чат в реальном времени (Socket.IO): комнаты-каналы, история в MongoDB, «печатает…», приватные сообщения, реакции; самопроверка `check:socket` | см. `lab27` |
 
 Ветки строго последовательны, и каждая лабораторная лежит только в своей ветке:
 `lab24` — ЛР №4 и **ничего** из ЛР №5; `lab25` — ЛР №4+№5 и **ничего** из MongoDB (ЛР №6);
-`lab26` — самая полная ветка (фронтенд + реляционное API + документное хранилище).
+`lab26` — без Socket.IO (ЛР №7); `lab27` — самая полная ветка
+(фронтенд + реляционное API + документное хранилище + реальное время).
 Проверить текущие вершины: `git for-each-ref --format='%(refname:short) %(objectname:short)' refs/heads/lab2*`
 
 
@@ -265,6 +268,24 @@ node scripts/selfcheck-lab3.js
 после проверки. Тестовые пользователи (`lab3.check.*@example.com`) удаляются
 автоматически. Признак успеха — `Пройдено проверок: 44/44` и
 `ВСЕ ЗАДАЧИ ЛАБОРАТОРНОЙ РАБОТЫ №3 ВЫПОЛНЕНЫ ✅`.
+
+**Лабораторная работа №7 (Socket.IO)** — проверяет файлы и зависимости чата,
+обмен сообщениями в реальном времени, комнаты-каналы (включая изоляцию),
+историю из MongoDB, уведомления о подключении/отключении, «печатает…»,
+приватные сообщения, голосование за сообщение (вложенные `reactions[]`),
+аутентификацию соединения по JWT и валидацию входных данных.
+
+```bash
+npm run check:socket
+# или напрямую:
+node scripts/selfcheck-socket.js
+```
+
+Скрипт подключается к запущенному серверу двумя Socket.IO-клиентами (а если
+сервера нет — поднимает свой и останавливает после проверки), в конце удаляет
+тестовые сообщения из `messages_mongo` и тестового пользователя. Признак успеха —
+`Пройдено проверок: 39/39` и `ВСЕ ЗАДАЧИ ЛАБОРАТОРНОЙ РАБОТЫ ПО SOCKET.IO ВЫПОЛНЕНЫ ✅`.
+В конце печается шпаргалка всех событий протокола.
 
 ---
 
@@ -681,6 +702,72 @@ npm run dev               # сервер: в логе должно быть «Mo
 
 ---
 
+## Чат в реальном времени (Socket.IO)
+
+Лаб. работа №7: тот же `server.js` обслуживает **Express и Socket.IO на одном
+порту 3000** — `const server = http.createServer(app)` вместо `app.listen(...)`,
+затем `createSocketServer(server)` (см. `socket/index.js`). Клиент подключается
+к `http://localhost:3000` **без** `/api/v1`: у Socket.IO свои пути `/socket.io/*`.
+
+**Задачи работы → как реализовано:**
+
+| Задача | Реализация |
+|--------|-----------|
+| Сервер Node.js + Express + Socket.IO | `socket/index.js`: `new Server(httpServer, { cors })`, обработчики событий |
+| Клиент (React) подключается к серверу | `my-app/src/socket.js` (`createSocket()`), вкладка «Чат» в `App.jsx` |
+| Отправка/получение сообщений в реальном времени | `chat:message` → `io.to(room).emit(...)`; ack-подтверждение отправителю |
+| Уведомления о подключении/отключении | `system:notice` (🟢/🔴) + `presence:list` (список онлайн) |
+| **Доп. функции (по выбору):** | |
+| Комнаты для разных чатов | `socket/rooms.js` — общий канал + каналы отделов; вход через `room:join`, изоляция сообщений |
+| История в MongoDB | `mongo/models/message.js`, коллекция `messages_mongo`; последних 50 сообщений канала при входе |
+| Приватные сообщения | `chat:private` — доставка конкретному `socket.id` (в БД не сохраняются) |
+| «Печатает…» | `chat:typing` с автогашением через 1500 мс на клиенте |
+| Голосование/реакции | `chat:react` → вложенный массив `reactions[]` документа сообщения: `$push`, позиционный `$` + `$addToSet`/`$pull` |
+| Аутентификация (бонус) | `socket/auth.js`: JWT из ЛР №3 в `handshake.auth.token`, битый токен → `connect_error` |
+
+**Структура кода:**
+
+- `socket/index.js` — `createSocketServer(httpServer)`: middleware аутентификации,
+  рассылки (`rooms:list`, `presence:list`, `system:notice`), обработчики
+  `room:join` / `room:leave` / `chat:message` / `chat:typing` / `chat:private` /
+  `chat:react` / `disconnect`;
+- `socket/rooms.js` — справочник каналов предметной области («Общий»,
+  «Отдел кадров», «Отдел разработки», «Отдел продаж») + защита от произвольных
+  id от клиента (`findRoom` → ошибка в ack для неизвестного канала);
+- `socket/presence.js` — `PresenceStore` (Map): кто онлайн, в каком канале,
+  счётчик онлайн по комнатам для бейджей;
+- `socket/auth.js` — верификация токена; гость (без токена) тоже может участвовать;
+- `mongo/models/message.js` — модель сообщения (канал, автор, текст,
+  **вложенные** `reactions[]: [{ emoji, users[] }]`, `timestamps`);
+- `my-app/src/socket.js` — клиент: `io(SOCKET_URL, { auth: { token, name } })`,
+  карта событий `SOCKET_EVENTS`;
+- `my-app/src/components/ChatRoom.jsx` — UI чата (каналы, лента, онлайн,
+  приватные сообщения, реакции, уведомления), `document.title` с числом онлайн,
+  отключение сокета при размонтировании.
+
+**Запуск и проверка:**
+
+```bash
+npm run dev            # сервер (Express + Socket.IO на :3000)
+cd my-app && npm run dev   # клиент на :5173 → вкладка «Чат»
+npm run check:socket   # автопроверка (39 проверок)
+```
+
+Для демонстрации откройте **два окна браузера** (или два разных браузера) —
+сообщения, уведомления о подключении/отключении и «печатает…» видны в реальном
+времени; история канала переживает перезагрузку (MongoDB).
+
+**Нюансы:**
+
+- Заголовки HTTP недоступны в WebSocket → JWT передаётся в `handshake.auth`;
+- сообщение приходит всем участникам канала **серверной рассылкой** (не
+  оптимистично на клиенте) — дублей нет, но при недоступности MongoDB ack
+  вернёт ошибку «Не удалось сохранить сообщение»;
+- реакция — «переключатель»: повторный клик снимает голос (`$pull`),
+  новая группа реакций создаётся через `$push`;
+- приватные сообщения и presence живут только в памяти процесса (история
+  сохраняется только для каналов).
+
 ## Известные нюансы
 
 1. **Прямой хост `db.<ref>.supabase.co` недоступен с IPv4** — проект сидит за
@@ -741,7 +828,7 @@ npm run dev               # сервер: в логе должно быть «Mo
 | `npm run check` | Автопроверка задач лаб. работы №2 (selfcheck) |
 | `cd my-app && npm install` | Установить зависимости фронтенда (React/Vite/Vitest) |
 | `cd my-app && npm run dev` | Запуск Vite dev-сервера клиента на :5173 |
-| `cd my-app && npm run test` | Юнит-тесты фронтенда (Vitest, 27 шт., мок API) |
+| `cd my-app && npm run test` | Юнит-тесты фронтенда (Vitest, 43 шт., мок API и Socket.IO) |
 | `cd my-app && npm run build` | Production-сборка клиента в `my-app/dist/` |
 | `cd my-app && npm run lint` | Линтер фронтенда (oxlint) |
 | `npm install cors` | Добавить CORS middleware (нужен Client → API, ЛР №5) |
@@ -751,6 +838,10 @@ npm run dev               # сервер: в логе должно быть «Mo
 | `npm install mongoose` | Установить ODM Mongoose (MongoDB, документные БД) |
 | `npm run seed:mongo` | Демо-документ в MongoDB со вложенными структурами |
 | `npm run check:mongo` | Самопроверка MongoDB-лабораторной (12 проверок) |
+| `npm install socket.io` | Socket.IO — реальное время поверх HTTP-сервера (ЛР №7) |
+| `cd my-app && npm install socket.io-client` | Клиентская библиотека Socket.IO (ЛР №7) |
+| `npm run check:socket` | Самопроверка чата в реальном времени (39 проверок) |
+| `curl 'http://localhost:3000/socket.io/?EIO=4&transport=polling'` | Проверить, что Socket.IO отвечает на :3000 |
 | `mongod --dbpath ~/mongodb-data --port 27017 --bind_ip 127.0.0.1 --fork --logpath /tmp/mongod.log` | Запустить локальный MongoDB |
 | `curl http://localhost:3000/api/v1/mongo/employees` | Список документов MongoDB |
 | `curl -X POST http://localhost:3000/api/v1/mongo/employees/:id/reviews -H 'Content-Type: application/json' -d '{"reviewer":"...","rating":9}'` | Добавить вложенный отзыв ($push) |

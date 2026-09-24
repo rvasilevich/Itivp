@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import AuthPage from './components/AuthPage';
 import EmployeeList from './components/EmployeeList';
 import Profile from './components/Profile';
+import ChatRoom from './components/ChatRoom';
 import { fetchProfile } from './api';
 import { clearSession, getStoredUser, getToken } from './session';
 
@@ -9,6 +10,7 @@ import { clearSession, getStoredUser, getToken } from './session';
 // При наличии JWT проверяем токен (GET /profile) и открываем функционал по роли:
 // admin — вкладки «Сотрудники» (полный CRUD, функционал не меняется) и «Профиль»;
 // user  — только свой профиль с редактированием данных (сохранение в БД).
+// Вкладка «Чат» (Socket.IO, ЛР №7) доступна всем авторизованным пользователям.
 export default function App() {
   const [user, setUser] = useState(null);
   const [isChecking, setIsChecking] = useState(() => Boolean(getToken()));
@@ -113,14 +115,43 @@ export default function App() {
           >
             Профиль
           </button>
+          <button
+            type="button"
+            className={`tab${activeTab === 'chat' ? ' is-active' : ''}`}
+            aria-pressed={activeTab === 'chat'}
+            onClick={() => setActiveTab('chat')}
+          >
+            Чат
+          </button>
         </nav>
       )}
 
-      {activeTab === 'employees' ? (
-        <EmployeeList />
-      ) : (
+      {!isAdmin && (
+        <nav className="tabs">
+          <button
+            type="button"
+            className={`tab${activeTab === 'profile' ? ' is-active' : ''}`}
+            aria-pressed={activeTab === 'profile'}
+            onClick={() => setActiveTab('profile')}
+          >
+            Профиль
+          </button>
+          <button
+            type="button"
+            className={`tab${activeTab === 'chat' ? ' is-active' : ''}`}
+            aria-pressed={activeTab === 'chat'}
+            onClick={() => setActiveTab('chat')}
+          >
+            Чат
+          </button>
+        </nav>
+      )}
+
+      {activeTab === 'employees' && <EmployeeList />}
+      {activeTab === 'profile' && (
         <Profile onProfileUpdate={handleProfileUpdate} onUnauthorized={handleLogout} />
       )}
+      {activeTab === 'chat' && <ChatRoom />}
     </main>
   );
 }

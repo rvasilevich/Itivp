@@ -2,14 +2,20 @@
 // чтобы JWT_SECRET и DATABASE_URL были доступны на этапе require().
 require('dotenv').config();
 
+const http = require('http');
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const { config, errorHandler } = require('./core');
 const { api } = require('./app');
 const mongoEmployeesRouter = require('./mongo/routes/employees');
+const { createSocketServer } = require('./socket');
 
 const app = express();
+
+// HTTP-сервер создаём вручную (а не app.listen), чтобы прикрепить к нему
+// и Express, и Socket.IO — они работают на одном порту 3000 (ЛР №7).
+const server = http.createServer(app);
 
 // CORS — разрешает запросы с клиентского React-приложения (localhost:5173, ЛР №5)
 app.use(cors());
@@ -60,4 +66,10 @@ app.use((req, res) => {
 // Глобальный обработчик ошибок (error-handling middleware)
 app.use(errorHandler);
 
-app.listen(config.port, () => console.log('Server running...'));
+// Socket.IO (ЛР №7): реальное время на том же HTTP-сервере и порту, что и REST API.
+// Клиент подключается к http://localhost:3000 (СОБЫТИЯ, а не REST-пути /api/v1):
+// комнаты-каналы, уведомления о подключении/отключении, история в MongoDB
+// (коллекция messages_mongo), индикатор «печатает…», приватные сообщения, реакции.
+createSocketServer(server);
+
+server.listen(config.port, () => console.log('Server running...'));
