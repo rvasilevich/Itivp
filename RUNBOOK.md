@@ -45,6 +45,23 @@
 - **База:** проект Supabase `duiefqyrzmbpqtigfdmr`, хост pooler'а
   `aws-1-eu-west-1.pooler.supabase.com` (регион **eu-west-1**).
 
+### Ветки ↔ лабораторные работы
+
+| Ветка | ЛР | Что внутри | Вершина ветки |
+|-------|----|------------|---------------|
+| `lab21` | №1 | Express CRUD API сотрудников (хранение в памяти) | `3f93c8f` |
+| `lab22` | №2 | PostgreSQL через Sequelize: модели, миграции, сиды | `2a716ac` |
+| `lab23` | №3 | Аутентификация JWT + RBAC, справочник `GET /api/v1` | `570b033` |
+| `lab24` | №4 | React `my-app`: список сотрудников на `useState`/`useEffect` + `localStorage` | `d933e78` |
+| `lab25` | №5 | React ↔ свой REST API (axios): GET с loading/error и «Повторить», оптимистичные POST/DELETE/PUT, поиск с debounce, `AbortController`; экраны входа/профиля | `69f7ffb` |
+| `lab26` | №6 | MongoDB + Mongoose: вложенные `skills[]`/`reviews[]`, CRUD-маршруты, Postman-коллекция | `783b009` |
+
+Ветки строго последовательны, и каждая лабораторная лежит только в своей ветке:
+`lab24` — ЛР №4 и **ничего** из ЛР №5; `lab25` — ЛР №4+№5 и **ничего** из MongoDB (ЛР №6);
+`lab26` — самая полная ветка (фронтенд + реляционное API + документное хранилище).
+Проверить текущие вершины: `git for-each-ref --format='%(refname:short) %(objectname:short)' refs/heads/lab2*`
+
+
 ---
 
 ## Требования
@@ -738,5 +755,11 @@ npm run dev               # сервер: в логе должно быть «Mo
 | `curl http://localhost:3000/api/v1/mongo/employees` | Список документов MongoDB |
 | `curl -X POST http://localhost:3000/api/v1/mongo/employees/:id/reviews -H 'Content-Type: application/json' -d '{"reviewer":"...","rating":9}'` | Добавить вложенный отзыв ($push) |
 | `curl -X PATCH http://localhost:3000/api/v1/mongo/employees/:id/skills/SQL -H 'Content-Type: application/json' -d '{"amount":1}'` | Увеличить уровень навыка ($inc + $) |
+| `git for-each-ref --format='%(refname:short) %(objectname:short)' refs/heads/lab2*` | Показать, что лежит в каждой lab-ветке (соответствие лабораторным) |
+| `git branch -f lab24 d933e78` | Переставить локальную ветку на нужный коммит (без переключения HEAD) |
+| `git push --force-with-lease origin lab24:lab24 lab25:lab25` | Force-push переставленных веток (проверяет, что на сервере нет чужих коммитов) |
+| `git worktree add --detach /tmp/lab24chk d933e78` | Открыть состояние ветки в отдельной папке, не трогая рабочее дерево |
+| `git worktree remove --force /tmp/lab24chk` | Удалить временный worktree после проверки |
+| `cd my-app && npx vitest run --reporter=default` | Прогнать тесты фронтенда вручную (в vitest 5 отчёта `basic` уже нет) |
 
 > **Новые ручные команды дописывать в эту таблицу и в соответствующий раздел!**
