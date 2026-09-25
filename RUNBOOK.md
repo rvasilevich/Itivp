@@ -67,6 +67,14 @@
 `lab28` — та же функциональность, но весь стек запускается в Docker (ЛР №8).
 Проверить текущие вершины: `git for-each-ref --format='%(refname:short) %(objectname:short)' refs/heads/lab2*`
 
+**Итоговая ветка — `release`.** В неё merge-коммитом влит результат ЛР №1–№8
+из `lab28` (`git merge --allow-unrelated-histories -X theirs lab28`: истории
+`release` и линеек `lab2x` не связаны, поэтому нужен явный флаг «разрешить
+несвязанные истории»). Сами lab-ветки не удаляются и не переписываются —
+каждая лабораторная по-прежнему лежит только в своей ветке. Исходное
+состояние `release` (до вливания) дополнительно помечено тегом
+`archive/original-c2df370`.
+
 
 ---
 
@@ -952,5 +960,9 @@ docker exec employee-eval-mongo mongosh --quiet employee_eval --eval 'db.getColl
 | `curl http://localhost:5001/health` | Healthcheck backend-а (в контейнере `PORT=5000`, наружу `5001`) |
 | `curl http://localhost/api/v1/employees` | REST API через nginx-прокси frontend-контейнера |
 | `docker run -d --name lab27-mongo -p 27017:27017 mongo:7` | Поднять MongoDB в Docker для локальной разработки/самопроверок (ЛР №7) |
+| `git push -u origin lab28` | Отправить ветку ЛР №8 на GitHub (создаёт `origin/lab28`, запоминает upstream) |
+| `git merge --allow-unrelated-histories -X theirs lab28` | Влить итоговый результат (`lab28`) в `release`: истории этих веток не связаны, в конфликтах принимается версия `lab28` |
+| `git rm index.js && git commit --amend --no-edit` | Убрать из merge-коммита legacy-заглушку `index.js` (точка входа проекта — `server.js`) |
+| `git push origin develop release` | Отправить на GitHub обновлённые ветки `develop` и `release` |
 
 > **Новые ручные команды дописывать в эту таблицу и в соответствующий раздел!**
