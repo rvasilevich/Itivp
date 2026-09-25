@@ -1,0 +1,11 @@
+# Что НЕ копируется в контекст сборки frontend-а (.dockerignore, ЛР №8)
+node_modules/
+dist/
+
+# Локальные адреса API/Socket.IO задаются на этапе сборки через build args,
+# поэтому .env в образ не попадает
+.env
+.env.local
+
+*.log
+.DS_Store

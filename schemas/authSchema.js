@@ -53,6 +53,37 @@ const authSchema = {
     return errors;
   },
 
+  // Валидация обновления профиля (PUT /profile): email и/или password, минимум одно поле
+  validateProfileUpdate(data) {
+    const errors = this.validateBody(data);
+    if (errors.length > 0) {
+      return errors;
+    }
+
+    const hasEmail = data.email !== undefined;
+    const hasPassword = data.password !== undefined;
+
+    if (!hasEmail && !hasPassword) {
+      errors.push('Укажите хотя бы одно поле для обновления: "email" или "password"');
+      return errors;
+    }
+
+    if (hasEmail) {
+      const email = typeof data.email === 'string' ? data.email.trim() : '';
+      if (email === '') {
+        errors.push('Поле "email" должно быть непустой строкой');
+      } else if (!EMAIL_REGEX.test(email)) {
+        errors.push('Поле "email" должно быть строкой в формате email');
+      }
+    }
+
+    if (hasPassword && (typeof data.password !== 'string' || data.password.length < 6)) {
+      errors.push('Поле "password" должно содержать не менее 6 символов');
+    }
+
+    return errors;
+  },
+
   // Валидация роли (RBAC)
   validateRole(role) {
     return typeof role === 'string' && ROLES.includes(role);

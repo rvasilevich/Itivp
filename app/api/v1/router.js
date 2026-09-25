@@ -6,6 +6,44 @@ const adminRouter = require('./admin');
 
 const router = express.Router();
 
+// Справочник API: ВСЕ эндпоинты приложения живут под префиксом /api/v1
+// (см. server.js: app.use('/api/v1', api.v1.router)).
+// GET /api/v1 — возвращает этот список, чтобы легко проверить актуальные пути.
+const API_INDEX = [
+  { method: 'GET', path: '/api/v1', access: 'все', description: 'Справочник эндпоинтов' },
+  { method: 'GET', path: '/api/v1/employees', access: 'все', description: 'Список всех сотрудников (поддерживает ?search=)' },
+  { method: 'GET', path: '/api/v1/employees/:id', access: 'все', description: 'Сотрудник по ID' },
+  { method: 'POST', path: '/api/v1/employees', access: 'все', description: 'Создать сотрудника' },
+  { method: 'PUT', path: '/api/v1/employees/:id', access: 'все', description: 'Обновить сотрудника' },
+  { method: 'DELETE', path: '/api/v1/employees/:id', access: 'все', description: 'Удалить сотрудника' },
+  { method: 'GET', path: '/api/v1/mongo/employees', access: 'все', description: 'MongoDB: список (?search=)' },
+  { method: 'GET', path: '/api/v1/mongo/employees/:id', access: 'все', description: 'MongoDB: сотрудник по ID' },
+  { method: 'POST', path: '/api/v1/mongo/employees', access: 'все', description: 'MongoDB: создать документ (skills[], reviews[] в теле)' },
+  { method: 'PUT', path: '/api/v1/mongo/employees/:id', access: 'все', description: 'MongoDB: обновить документ' },
+  { method: 'DELETE', path: '/api/v1/mongo/employees/:id', access: 'все', description: 'MongoDB: удалить документ' },
+  { method: 'POST', path: '/api/v1/mongo/employees/:id/reviews', access: 'все', description: 'MongoDB: добавить отзыв ($push)' },
+  { method: 'PUT', path: '/api/v1/mongo/employees/:id/reviews/:reviewId', access: 'все', description: 'MongoDB: изменить отзыв (позиционный $)' },
+  { method: 'DELETE', path: '/api/v1/mongo/employees/:id/reviews/:reviewId', access: 'все', description: 'MongoDB: удалить отзыв ($pull)' },
+  { method: 'POST', path: '/api/v1/mongo/employees/:id/skills', access: 'все', description: 'MongoDB: добавить навык ($addToSet)' },
+  { method: 'PATCH', path: '/api/v1/mongo/employees/:id/skills/:name', access: 'все', description: 'MongoDB: +уровень навыка ($inc, позиционный $)' },
+  { method: 'POST', path: '/api/v1/auth/register', access: 'все', description: 'Регистрация (email, password) → 201' },
+  { method: 'POST', path: '/api/v1/auth/login', access: 'все', description: 'Вход → { token, user }' },
+  { method: 'GET', path: '/api/v1/profile', access: 'авторизованные', description: 'Данные текущего пользователя' },
+  { method: 'PUT', path: '/api/v1/profile', access: 'авторизованные', description: 'Обновить свои данные (email/пароль) с сохранением в БД' },
+  { method: 'DELETE', path: '/api/v1/profile', access: 'авторизованные', description: 'Удалить свою учётную запись' },
+  { method: 'GET', path: '/api/v1/admin/users', access: 'admin', description: 'Список всех пользователей (RBAC)' },
+  { method: 'GET', path: '/api/v1/admin/users/:id', access: 'admin', description: 'Пользователь по ID (RBAC)' },
+  { method: 'PATCH', path: '/api/v1/admin/users/:id/role', access: 'admin', description: 'Сменить роль user/admin (RBAC)' },
+  { method: 'DELETE', path: '/api/v1/admin/users/:id', access: 'admin', description: 'Удалить пользователя (RBAC)' }
+];
+
+router.get('/', (req, res) => {
+  res.json({
+    baseUrl: `${req.protocol}://${req.get('host')}/api/v1`,
+    endpoints: API_INDEX
+  });
+});
+
 // Подключение маршрутов v1
 router.use('/employees', employeesRouter);
 router.use('/auth', authRouter);

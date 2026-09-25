@@ -1,0 +1,158 @@
+# docker-compose для курсового проекта «Оценка эффективности сотрудников» (ЛР №8).
+#
+# Сервисы:
+#   postgres      — реляционное хранилище (Sequelize): Employees, Users (JWT/RBAC);
+#   mongo         — документное хранилище (Mongoose): skills[]/reviews[] и история чата
+#                   в коллекции messages_mongo (Socket.IO). Проект использует ОБЕ БД,
+#                   поэтому в compose подняты и PostgreSQL, и MongoDB.
+#   backend       — Node.js/Express/Socket.IO (порт 5000), на старте накатывает
+#                   миграции и (при пустой БД) сиды — см. docker/entrypoint.sh;
+#   frontend      — production-сборка React (Vite) в nginx; nginx также reverse-proxy
+#                   для /api/ и /socket.io/ (доп. требование);
+#   mongo-express — веб-интерфейс MongoDB (доп. требование).
+#
+# Запуск:      docker compose up --build        (совместимо: docker-compose up --build)
+# Остановка:   docker compose down              (с данными: down -v)
+# Проверка:    http://localhost        — frontend (React)
+#              http://localhost:5000/health — healthcheck backend-а
+#              http://localhost:8081  — mongo-express (MongoDB UI)
+#
+# Переменные: compose автоматически читает .env в корне проекта (для подстановки
+# ${...}). Если .env нет — используются значения по умолчанию, и всё работает
+# на локальных контейнерных БД. Чтобы backend ходил в облачный Supabase, задайте
+# в .env: DOCKER_DATABASE_URL=<строка подключения Supabase>.
+name: employee-eval
+
+services:
+  # ---------- Реляционная БД (Sequelize: миграции + сиды) ----------
+  postgres:
+    image: postgres:16-alpine
+    container_name: employee-eval-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: employee_eval
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d employee_eval"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - backend_net
+
+  # ---------- Документная БД (Mongoose: skills/reviews, сообщения чата) ----------
+  mongo:
+    image: mongo:7
+    container_name: employee-eval-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_DATABASE: employee_eval
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks:
+      - backend_net
+
+  # ---------- Backend: Express + Socket.IO ----------
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: employee-eval-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "5000"
+      # По умолчанию — локальный контейнер postgres; Supabase — через DOCKER_DATABASE_URL в .env
+      DATABASE_URL: ${DOCKER_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/employee_eval}
+      MONGO_URI: mongodb://mongo:27017/employee_eval
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+      RUN_MIGRATIONS: "true"
+    ports:
+      # Хост-порт настраивается через BACKEND_PORT (по умолчанию 5001).
+      # Внутри контейнера сервер слушает 5000, но на macOS хост-порт 5000 занят
+      # AirPlay Receiver (Control Center). Чтобы получить «как в задании»
+      # http://localhost:5000, задайте BACKEND_PORT=5000 в .env и отключите
+      # AirPlay Receiver: Системные настройки → Основные → AirDrop и Handoff.
+      - "${BACKEND_PORT:-5001}:5000"
+    volumes:
+      # Доп. требование: том для логов backend-а
+      - backend_logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5000/health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    networks:
+      - backend_net   # доступ к postgres и mongo
+      - frontend_net  # nginx проксирует запросы на backend
+
+  # ---------- Frontend: статика React в nginx + reverse-proxy ----------
+  frontend:
+    build:
+      context: ./my-app
+      dockerfile: Dockerfile
+      args:
+        # Обращение к тому же origin: /api/v1 и /socket.io/ проксирует nginx
+        VITE_API_URL: /api/v1
+        VITE_SOCKET_URL: same-origin
+    container_name: employee-eval-frontend
+    restart: unless-stopped
+    ports:
+      # Хост-порт frontend-а (по умолчанию 80 → http://localhost)
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      backend:
+        condition: service_started
+    networks:
+      - frontend_net
+
+  # ---------- MongoDB UI (доп. требование) ----------
+  mongo-express:
+    image: mongo-express:1.0.2
+    container_name: employee-eval-mongo-express
+    restart: unless-stopped
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://mongo:27017/
+      # В образе mongo-express переменная ME_CONFIG_BASICAUTH=true по умолчанию,
+      # поэтому её нужно явно выключить. Если нужна защита логином/паролем —
+      # поставьте "true" и задайте ME_CONFIG_BASICAUTH_USERNAME/PASSWORD.
+      ME_CONFIG_BASICAUTH: "false"
+    ports:
+      # Хост-порт веб-интерфейса MongoDB (по умолчанию 8081)
+      - "${MONGO_EXPRESS_PORT:-8081}:8081"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - backend_net
+
+# ---------- Тома (данные БД и логи переживают пересоздание контейнеров) ----------
+volumes:
+  postgres_data:
+  mongo_data:
+  backend_logs:
+
+# ---------- Изоляция сетей (доп. требование) ----------
+networks:
+  # Внутренняя сеть: только БД + backend + mongo-express (БД наружу не публикуются)
+  backend_net:
+    driver: bridge
+  # Внешняя сеть: frontend (публикует 80) и backend (для reverse-proxy nginx)
+  frontend_net:
+    driver: bridge

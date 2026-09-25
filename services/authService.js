@@ -76,6 +76,50 @@ class AuthService {
     return this.toSafeUser(user);
   }
 
+  // Обновить данные текущего пользователя (email и/или пароль) с сохранением в БД
+  async updateProfile(userId, data) {
+    const errors = authSchema.validateProfileUpdate(data);
+
+    if (errors.length > 0) {
+      throw new AppError(400, 'Некорректные данные запроса', errors);
+    }
+
+    const updates = {};
+
+    if (data.email !== undefined) {
+      const email = data.email.trim().toLowerCase();
+      const existing = await this.repository.findByEmail(email);
+
+      if (existing && existing.id !== userId) {
+        throw new AppError(409, 'Пользователь с таким email уже зарегистрирован');
+      }
+
+      updates.email = email;
+    }
+
+    if (data.password !== undefined) {
+      updates.passwordHash = await bcrypt.hash(data.password, PASSWORD_SALT_ROUNDS);
+    }
+
+    let user;
+
+    try {
+      user = await this.repository.updateProfile(userId, updates);
+    } catch (err) {
+      // Подстраховка от гонки: уникальность колонки email
+      if (err?.name === 'SequelizeUniqueConstraintError') {
+        throw new AppError(409, 'Пользователь с таким email уже зарегистрирован');
+      }
+      throw err;
+    }
+
+    if (!user) {
+      throw new AppError(404, 'Пользователь не найден');
+    }
+
+    return this.toSafeUser(user);
+  }
+
   // Удалить собственную учётную запись
   async deleteUser(userId) {
     const deleted = await this.repository.delete(userId);

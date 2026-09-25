@@ -1,5 +1,6 @@
 // Полная самопроверка лабораторной работы №2
-// Запуск: cd /Users/rodion/my-node-app && node /tmp/lab2-selfcheck.js
+// Запуск: cd /Users/rodion/my-node-app && npm run check
+//   (или напрямую: node scripts/selfcheck.js)
 require('dotenv').config();
 const { Sequelize } = require('sequelize');
 

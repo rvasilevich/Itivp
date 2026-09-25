@@ -8,7 +8,7 @@ class EmployeeRepository {
     const where = {};
 
     // Серверный поиск: нечувствительное к регистру частичное совпадение
-    // по ФИО, должности, отделу и email (LIKE '%<search>%').
+    // по ФИО, должности, отделу и email (ILIKE '%<search>%').
     if (search && search.trim() !== '') {
       const pattern = `%${search.trim()}%`;
       where[Op.or] = [

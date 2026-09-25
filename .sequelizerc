@@ -1,0 +1,17 @@
+'use strict';
+
+// ВАЖНО: sequelize-cli (6.x) НЕ читает .env автоматически, поэтому без этой
+// строки config/config.json с "use_env_variable": "DATABASE_URL" падает с
+// ошибкой "Error parsing url: undefined". Здесь мы сами подгружаем .env
+// ДО того, как CLI прочитает config/config.json.
+require('dotenv').config();
+
+const path = require('path');
+
+// Пути к конфигу, моделям, миграциям и сидам (аналог вывода `sequelize-cli init`).
+module.exports = {
+  config: path.resolve('config', 'config.json'),
+  'models-path': path.resolve('models'),
+  'migrations-path': path.resolve('migrations'),
+  'seeders-path': path.resolve('seeders')
+};
