@@ -49,6 +49,21 @@ app.use('/api/v1/mongo/employees', mongoEmployeesRouter);
 // Подключение маршрутов API v1
 app.use('/api/v1', api.v1.router);
 
+// Healthcheck-эндпоинт (ЛР №8): его опрашивает Docker HEALTHCHECK и
+// docker-compose (depends_on: condition: service_healthy).
+// Возвращает 200, если HTTP-сервер отвечает и MongoDB доступна; иначе 503 —
+// так контейнер помечается unhealthy, пока не подключится к БД.
+app.get('/health', (req, res) => {
+  const mongoUp = mongoose.connection.readyState === 1;
+
+  res.status(mongoUp ? 200 : 503).json({
+    status: mongoUp ? 'ok' : 'degraded',
+    uptime: Math.round(process.uptime()),
+    mongo: mongoUp ? 'up' : 'down',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Обработка несуществующих маршрутов — 404
 app.use((req, res) => {
   const isApiV1 = req.originalUrl.startsWith('/api/v1');

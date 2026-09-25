@@ -1,9 +1,24 @@
 import { io } from 'socket.io-client';
 import { getStoredUser, getToken } from './session';
 
-// Адрес Socket.IO-сервера. В отличие от REST API (база /api/v1), Socket.IO
-// работает по своим путям (/socket.io/*) прямо на корне сервера — порт тот же 3000.
-export const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000';
+// Адрес Socket.IO-сервера. Отличие от REST API (база /api/v1): Socket.IO
+// работает по своим путям (/socket.io/*) прямо на корне сервера — порт тот же.
+//
+// Значение берётся из переменной VITE_SOCKET_URL (my-app/.env) и «зашивается»
+// Vite в бандл на этапе сборки:
+//   • http://localhost:3000            — локальная разработка (dev-сервер :5173);
+//   • "same-origin" (или пусто, или "/") — тот же origin: в Docker-сборке запросы
+//     проксирует nginx (reverse-proxy /socket.io/ → backend:5000, ЛР №8).
+// При значении «same-origin» адрес = undefined, и socket.io-client сам берёт
+// window.location.
+const configuredUrl = import.meta.env.VITE_SOCKET_URL;
+const useSameOrigin = configuredUrl === 'same-origin' || configuredUrl === '' || configuredUrl === '/';
+
+export const SOCKET_URL = useSameOrigin ? undefined : configuredUrl || 'http://localhost:3000';
+
+// Человекочитаемый адрес для подписи в интерфейсе
+export const SOCKET_DISPLAY_URL = SOCKET_URL
+  || (typeof window !== 'undefined' ? window.location.origin : 'same-origin');
 
 // Создаёт Socket.IO-соединение с сервером (ЛР №7).
 // JWT из ЛР №3 передаём в auth рукопожатия: заголовки в WebSocket недоступны,
@@ -24,6 +39,7 @@ export function createSocket() {
     reconnectionAttempts: 5,
   });
 }
+
 
 // События протокола (список — в шпаргалке scripts/selfcheck-socket.js)
 export const SOCKET_EVENTS = {

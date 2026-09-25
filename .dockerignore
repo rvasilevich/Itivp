@@ -1,0 +1,20 @@
+# Что НЕ копируется в образ backend-а (.dockerignore, ЛР №8)
+node_modules/
+my-app/node_modules/
+my-app/dist/
+
+# Секреты и локальные файлы окружения не должны попадать в образ:
+# переменные передаются контейнеру через docker-compose (environment / .env).
+.env
+.env.local
+*.log
+logs/
+
+.git/
+.gitignore
+.DS_Store
+
+# Документация и вспомогательные материалы не нужны внутри образа
+postman/
+RUNBOOK.md
+README.md

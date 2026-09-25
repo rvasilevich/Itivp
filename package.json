@@ -15,6 +15,9 @@
     "check:mongo": "node scripts/selfcheck-mongo.js",
     "check:socket": "node scripts/selfcheck-socket.js",
     "seed:mongo": "node scripts/seed-mongo.js",
+    "docker:up": "docker compose up --build",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {

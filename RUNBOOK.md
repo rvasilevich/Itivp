@@ -30,8 +30,9 @@
 13. [Фронтенд (my-app, Vite + React)](#фронтенд-my-app-vite--react)
 14. [MongoDB (Mongoose)](#mongodb-mongoose)
 15. [Чат в реальном времени (Socket.IO)](#чат-в-реальном-времени-socketio)
-16. [Известные нюансы](#известные-нюансы)
-17. [Сводная таблица команд](#сводная-таблица-команд)
+16. [Docker и Docker Compose (ЛР №8)](#docker-и-docker-compose-лр-8)
+17. [Известные нюансы](#известные-нюансы)
+18. [Сводная таблица команд](#сводная-таблица-команд)
 
 ---
 
@@ -57,11 +58,13 @@
 | `lab25` | №5 | React ↔ свой REST API (axios): GET с loading/error и «Повторить», оптимистичные POST/DELETE/PUT, поиск с debounce, `AbortController`; экраны входа/профиля | `69f7ffb` |
 | `lab26` | №6 | MongoDB + Mongoose: вложенные `skills[]`/`reviews[]`, CRUD-маршруты, Postman-коллекция | `2e5a233` |
 | `lab27` | №7 | Чат в реальном времени (Socket.IO): комнаты-каналы, история в MongoDB, «печатает…», приватные сообщения, реакции; самопроверка `check:socket` | см. `lab27` |
+| `lab28` | №8 | Docker/Docker Compose: образы backend (Node 22 Alpine) и frontend (multi-stage → nginx), сервисы `postgres` + `mongo`, reverse-proxy, healthcheck, mongo-express | см. `lab28` |
 
 Ветки строго последовательны, и каждая лабораторная лежит только в своей ветке:
 `lab24` — ЛР №4 и **ничего** из ЛР №5; `lab25` — ЛР №4+№5 и **ничего** из MongoDB (ЛР №6);
 `lab26` — без Socket.IO (ЛР №7); `lab27` — самая полная ветка
-(фронтенд + реляционное API + документное хранилище + реальное время).
+(фронтенд + реляционное API + документное хранилище + реальное время);
+`lab28` — та же функциональность, но весь стек запускается в Docker (ЛР №8).
 Проверить текущие вершины: `git for-each-ref --format='%(refname:short) %(objectname:short)' refs/heads/lab2*`
 
 
@@ -69,9 +72,10 @@
 
 ## Требования
 
-- Node.js ≥ 18 (проверено на Node 24.21.0)
+- Node.js ≥ 20.19 (проект проверен на Node 24.21.0; `mongoose@9` требует ≥ 20.19)
 - npm
-- Доступ в интернет (БД облачная)
+- Docker + Docker Compose — только для ЛР №8 (в остальных лабораторных не нужен)
+- Доступ в интернет (БД облачная) — **не нужен** при запуске через Docker: БД поднимаются локально контейнерами
 
 ---
 
@@ -768,6 +772,91 @@ npm run check:socket   # автопроверка (39 проверок)
 - приватные сообщения и presence живут только в памяти процесса (история
   сохраняется только для каналов).
 
+## Docker и Docker Compose (ЛР №8)
+
+Лаб. работа №8: весь стек (backend + frontend + PostgreSQL + MongoDB)
+поднимается контейнерами одной командой — локально установленные Node.js и БД
+не нужны, версии не конфликтуют.
+
+### Запуск
+
+```bash
+docker compose up --build        # или: docker-compose up --build
+docker compose ps                # статус сервисов (и healthcheck)
+docker compose logs -f backend   # логи backend: миграции, сиды, сервер
+docker compose restart backend   # перезапуск (сиды повторно не применятся)
+docker compose down              # остановить контейнеры
+docker compose down -v           # + удалить тома (данные БД будут потеряны)
+```
+
+После старта (`docker compose ps` — все сервисы `running`/`healthy`):
+
+| Что | Адрес |
+|-----|-------|
+| Frontend (React через nginx) | http://localhost |
+| Backend (healthcheck) | http://localhost:5001/health |
+| REST API (через nginx-прокси) | http://localhost/api/v1 |
+| Socket.IO (через nginx-прокси) | http://localhost/socket.io/?EIO=4&transport=polling |
+| MongoDB UI (mongo-express) | http://localhost:8081 |
+| Логин в приложении | `admin@example.com` / `Admin123!` (создаётся сидом) |
+
+### Файлы
+
+| Файл | Назначение |
+|------|-----------|
+| `Dockerfile` | backend: `node:22-alpine`, `npm ci`, `EXPOSE 5000`, `HEALTHCHECK GET /health`, точка входа `docker/entrypoint.sh` |
+| `docker/entrypoint.sh` | `sequelize-cli db:migrate` → сиды (только если таблица `Users` пуста) → `node server.js` |
+| `my-app/Dockerfile` | frontend: **multi-stage** — `npm ci && vite build` → `nginx:alpine` со статикой (итоговый образ ~94 МБ) |
+| `my-app/nginx.conf` | раздача SPA (`try_files` → `index.html`) + reverse-proxy `/api/` и `/socket.io/` → `backend:5000` (заголовки `Upgrade` для WebSocket) |
+| `docker-compose.yml` | сервисы `postgres`, `mongo`, `backend`, `frontend`, `mongo-express`; сети `backend_net`/`frontend_net`; тома |
+| `.dockerignore`, `my-app/.dockerignore` | не копировать в образы `node_modules`, `.env`, `dist` |
+
+### Переменные, порты, сети
+
+- Compose автоматически читает `.env` корня проекта и подставляет
+  `${JWT_SECRET}`, `${BACKEND_PORT}`, `${FRONTEND_PORT}`, `${MONGO_EXPRESS_PORT}`
+  и `DOCKER_DATABASE_URL`. Без `.env` работают значения по умолчанию.
+- Внутри контейнера backend слушает `5000` (`PORT=5000`), наружу по умолчанию
+  проброшен `5001`: на macOS хост-порт **5000 занят AirPlay Receiver**
+  (Control Center). Чтобы получить ровно `http://localhost:5000` — задайте
+  `BACKEND_PORT=5000` в `.env` и отключите AirPlay Receiver
+  (Системные настройки → Основные → AirDrop и Handoff).
+- Чтобы backend работал с **облачным Supabase** вместо контейнерного PostgreSQL:
+  добавьте в `.env` `DOCKER_DATABASE_URL=<строка подключения Supabase>`.
+- Базы (`postgres`, `mongo`) **не публикуются на хост** — доступны только
+  внутри сети `backend_net`. Наружу открыты `80` (frontend), `5001` (backend),
+  `8081` (mongo-express).
+
+### Проверка (curl / контейнеры)
+
+```bash
+curl http://localhost:5001/health
+curl http://localhost/api/v1
+curl http://localhost/api/v1/employees
+curl -X POST http://localhost/api/v1/auth/login -H 'Content-Type: application/json' \
+  -d '{"email":"admin@example.com","password":"Admin123!"}'
+curl 'http://localhost/socket.io/?EIO=4&transport=polling'
+
+# Данные внутри контейнеров
+docker compose exec -T postgres psql -U postgres -d employee_eval -c 'SELECT COUNT(*) FROM "Employees"'
+docker exec employee-eval-mongo mongosh --quiet employee_eval --eval 'db.getCollectionNames()'
+```
+
+### Нюансы
+
+- **`node:18-alpine` из шаблона задания не подходит**: `mongoose@9` требует
+  Node ≥ 20.19 (`engines`) — образ собран на `node:22-alpine`.
+- **Сиды идемпотентны на уровне entrypoint**: `bulkInsert` не идемпотентен, а
+  `Users.email` — `UNIQUE`, поэтому сиды выполняются только при пустой `Users`.
+  При повторном запуске в логах: «Пользователи уже есть (Users=1) — сиды пропускаем».
+- **Frontend собирается с относительными адресами** (`VITE_API_URL=/api/v1`,
+  `VITE_SOCKET_URL=same-origin`) — передаются build-аргументами из compose;
+  поэтому CORS для контейнерного фронтенда не нужен.
+- `mongo-express` в образе по умолчанию имеет `ME_CONFIG_BASICAUTH=true` —
+  в compose он выключен (`ME_CONFIG_BASICAUTH: "false"`), иначе UI отдаёт 401.
+- Первая сборка скачивает образы `node:22-alpine`, `nginx:alpine`, `mongo:7`,
+  `postgres:16-alpine`, `mongo-express` — нужен интернет (единоразово).
+
 ## Известные нюансы
 
 1. **Прямой хост `db.<ref>.supabase.co` недоступен с IPv4** — проект сидит за
@@ -852,5 +941,16 @@ npm run check:socket   # автопроверка (39 проверок)
 | `git worktree add --detach /tmp/lab24chk d933e78` | Открыть состояние ветки в отдельной папке, не трогая рабочее дерево |
 | `git worktree remove --force /tmp/lab24chk` | Удалить временный worktree после проверки |
 | `cd my-app && npx vitest run --reporter=default` | Прогнать тесты фронтенда вручную (в vitest 5 отчёта `basic` уже нет) |
+| `docker compose up --build` | Собрать образы и поднять весь стек (ЛР №8): postgres, mongo, backend, frontend, mongo-express |
+| `docker compose ps` | Статус контейнеров и healthcheck |
+| `docker compose logs -f backend` | Логи backend-а (миграции, сиды, старт сервера) |
+| `docker compose restart backend` | Перезапустить backend (сиды повторно не применятся) |
+| `docker compose down` / `down -v` | Остановить стек / + удалить тома с данными БД |
+| `docker compose config` | Проверить итоговую конфигурацию compose (подстановка переменных) |
+| `docker compose exec -T postgres psql -U postgres -d employee_eval -c '...'` | SQL-запрос к PostgreSQL внутри контейнера (без публикации порта на хост) |
+| `docker exec employee-eval-mongo mongosh --quiet employee_eval --eval '...'` | Запрос к MongoDB внутри контейнера |
+| `curl http://localhost:5001/health` | Healthcheck backend-а (в контейнере `PORT=5000`, наружу `5001`) |
+| `curl http://localhost/api/v1/employees` | REST API через nginx-прокси frontend-контейнера |
+| `docker run -d --name lab27-mongo -p 27017:27017 mongo:7` | Поднять MongoDB в Docker для локальной разработки/самопроверок (ЛР №7) |
 
 > **Новые ручные команды дописывать в эту таблицу и в соответствующий раздел!**

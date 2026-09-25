@@ -30,12 +30,14 @@ REST API для управления оценкой эффективности �
 - JSON Web Token (jsonwebtoken)
 - bcrypt (хеширование паролей)
 - Nodemon (для разработки)
+- Docker + Docker Compose — контейнеризация backend, frontend и БД (ЛР №8)
 
-Фронтенд (`my-app/`, лабораторные работы №4–№7):
+Фронтенд (`my-app/`, лабораторные работы №4–№8):
 
 - React 19 + Vite
 - axios (HTTP-клиент, REST API)
 - socket.io-client (WebSocket-клиент чата, ЛР №7)
+- nginx (раздача production-сборки + reverse-proxy, ЛР №8)
 - Vitest + Testing Library (тесты с моком API)
 
 ## Ветки и лабораторные работы
@@ -49,10 +51,12 @@ REST API для управления оценкой эффективности �
 | `lab25` | №5 | Интеграция React ↔ REST API (axios): GET с loading/error, оптимистичный CRUD, поиск с debounce |
 | `lab26` | №6 | MongoDB + Mongoose: вложенные структуры, CRUD-маршруты, Postman-коллекция |
 | `lab27` | №7 | Чат в реальном времени (Socket.IO): комнаты, история в MongoDB, typing, приватные сообщения, реакции |
+| `lab28` | №8 | Docker/Docker Compose: контейнеризация backend и frontend (multi-stage + nginx), PostgreSQL и MongoDB сервисами, reverse-proxy, healthcheck |
 
 Каждая лабораторная лежит только в своей ветке: `lab24` — без функционала №5,
 `lab25` — без MongoDB, `lab26` — без Socket.IO, `lab27` — самая полная
-(фронтенд + реляционное API + документное хранилище + реальное время).
+(фронтенд + реляционное API + документное хранилище + реальное время),
+`lab28` — добавляет к ней запуск всего стека в Docker.
 
 
 ## Фронтенд (ЛР №4–№5)
@@ -209,6 +213,78 @@ npm run check:socket             # самопроверка: 39 проверок
 Демонстрация: `npm run dev` + `cd my-app && npm run dev`, открыть **два окна**
 (или разные браузеры), войти и переключаться между каналами — сообщения,
 уведомления о подключении/отключении и «печатает…» появляются в реальном времени.
+
+## Docker и Docker Compose: ЛР №8
+
+Весь стек (frontend + backend + обе базы данных) поднимается одной командой —
+локально установленные Node.js, PostgreSQL и MongoDB не нужны, конфликтов версий
+и «а у меня не запускается» больше нет.
+
+```bash
+docker compose up --build      # совместимо: docker-compose up --build
+docker compose down            # остановить (с данными: down -v)
+docker compose logs -f backend # логи backend-а
+```
+
+| Сервис | Образ / сборка | Порт на хосте | Назначение |
+|--------|----------------|---------------|------------|
+| `frontend` | `my-app/Dockerfile` — **multi-stage** (Node builder → `nginx:alpine`) | `80` | production-сборка React; nginx раздаёт SPA и работает **reverse-proxy** `/api/` и `/socket.io/` → `backend:5000` |
+| `backend` | `./Dockerfile` — `node:22-alpine` | `5001` → 5000 | Express + Socket.IO (`server.js`); на старте накатывает миграции и (при пустой БД) сиды |
+| `postgres` | `postgres:16-alpine` | не публикуется | реляционное хранилище (Sequelize): `Employees`, `Users` |
+| `mongo` | `mongo:7` | не публикуется | документное хранилище (Mongoose): `employees_mongo` + история чата `messages_mongo` |
+| `mongo-express` | `mongo-express:1.0.2` | `8081` | веб-интерфейс MongoDB (доп. требование) |
+
+**Задачи работы → как реализовано:**
+
+| Задача | Реализация |
+|--------|-----------|
+| Dockerfile для backend | `./Dockerfile`: `node:22-alpine`, `npm ci`, `EXPOSE 5000`, `HEALTHCHECK`, точка входа `docker/entrypoint.sh` |
+| Dockerfile для frontend | `my-app/Dockerfile`: **multi-stage** — на первом этапе `vite build`, на втором только статика + `nginx:alpine` (итоговый образ ~94 МБ, без Node.js и `node_modules`) |
+| docker-compose: backend + frontend + БД | `docker-compose.yml`, сервисы `backend`, `frontend`, `postgres`, `mongo` (+ `mongo-express`) |
+| Сборка и запуск | `docker compose up --build`; конфигурация проверена (`docker compose config`) |
+| Проверка работы | `http://localhost` — приложение, `http://localhost:5001/health` — backend, `http://localhost:8081` — MongoDB UI |
+| **Доп. требования:** | |
+| Переменные окружения через `.env` | `${POSTGRES_*}`/`${JWT_SECRET}`/`${BACKEND_PORT}` подставляются из `.env`; секреты в образ не копируются (`.dockerignore`) |
+| Healthcheck для backend | `GET /health` (в `server.js`) + `HEALTHCHECK` в Dockerfile; `depends_on: condition: service_healthy` для БД |
+| Reverse-proxy (nginx) | `my-app/nginx.conf`: `location /api/` и `/socket.io/` → `backend:5000` (с заголовками `Upgrade` для WebSocket) |
+| Сервис mongo-express | `mongo-express` (порт `8081`) для просмотра коллекций MongoDB |
+| Изоляция сетей | две bridge-сети: `backend_net` (БД + backend) и `frontend_net` (nginx ↔ backend); БД наружу не публикуются |
+| Том для логов | `backend_logs:/app/logs` + том данных БД (`postgres_data`, `mongo_data`) |
+
+**Как это работает (нюансы):**
+
+- **Один origin — нет CORS.** Frontend собирается с `VITE_API_URL=/api/v1` и
+  `VITE_SOCKET_URL=same-origin`, поэтому браузер обращается к тому же хосту
+  (`http://localhost`), а запросы и WebSocket проксирует nginx. Значение
+  `same-origin` в `my-app/src/socket.js` означает «взять `window.location`».
+- **Миграции и сиды на старте** (`docker/entrypoint.sh`): `db:migrate` идемпотентен
+  (журнал `SequelizeMeta`), а сиды через `bulkInsert` — нет (у `Users.email`
+  `UNIQUE`), поэтому они выполняются только при пустой таблице `Users`
+  (в логах при повторном запуске: «Пользователи уже есть (Users=1) — сиды пропускаем»).
+- **Облачный Supabase остаётся вариантом**: чтобы backend ходил в Supabase, а не
+  в контейнерный PostgreSQL, задайте в `.env` `DOCKER_DATABASE_URL=<строка подключения>`.
+- **Почему `node:22-alpine`, а не `node:18-alpine` из шаблона?** `mongoose@9`
+  требует Node ≥ 20.19 (`engines`), поэтому на 18-й версии приложение не запустится.
+- **Порт backend-а:** внутри контейнера всегда `5000`; на macOS хост-порт `5000`
+  занят **AirPlay Receiver** (Control Center), поэтому по умолчанию наружу
+  проброшен `5001`. Чтобы получить ровно `http://localhost:5000`, задайте
+  `BACKEND_PORT=5000` в `.env` и отключите AirPlay Receiver
+  (Системные настройки → Основные → AirDrop и Handoff).
+
+**Проверка вручную (после `docker compose up --build`):**
+
+```bash
+curl http://localhost:5001/health            # {"status":"ok","mongo":"up",...}
+curl http://localhost/api/v1                 # справочник API через nginx
+curl http://localhost/api/v1/employees       # список из PostgreSQL (сиды)
+curl -X POST http://localhost/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@example.com","password":"Admin123!"}'   # JWT
+curl 'http://localhost/socket.io/?EIO=4&transport=polling'    # рукопожатие Socket.IO
+```
+
+Откройте `http://localhost`, войдите как `admin@example.com` / `Admin123!`
+(пользователь создаётся сидом) — вкладка «Чат» работает через тот же nginx.
 
 ## Установка и настройка
 
@@ -400,6 +476,11 @@ my-node-app/
 │   └── index.js
 ├── config/                     # Конфигурация Sequelize
 │   └── config.json
+├── docker/                     # Docker: ЛР №8
+│   └── entrypoint.sh           # Миграции + сиды, затем запуск server.js
+├── Dockerfile                  # Образ backend-а: node:22-alpine
+├── docker-compose.yml          # Стек: postgres, mongo, backend, frontend, mongo-express
+├── .dockerignore               # Что не копировать в образ backend-а
 ├── core/                       # Ядро приложения
 │   ├── config.js               # Конфигурация (порт)
 │   ├── AppError.js             # Класс ошибок приложения
@@ -446,6 +527,9 @@ my-node-app/
 ```
 my-app/
 ├── .env                        # VITE_API_URL и VITE_SOCKET_URL (не в git), шаблон — .env.example
+├── Dockerfile                  # multi-stage: vite build → nginx (ЛР №8)
+├── nginx.conf                  # Раздача SPA + reverse-proxy /api/ и /socket.io/
+├── .dockerignore               # Что не копировать в контекст сборки frontend-а
 ├── src/
 │   ├── api.js                  # axios-клиент (JWT-перехватчик, CRUD + auth/profile)
 │   ├── socket.js               # Socket.IO-клиент: JWT в handshake, карта событий

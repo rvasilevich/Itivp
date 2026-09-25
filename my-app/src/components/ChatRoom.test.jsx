@@ -58,6 +58,7 @@ const state = vi.hoisted(() => ({ sockets: [] }));
 
 vi.mock('../socket', () => ({
   SOCKET_URL: 'http://localhost:3000',
+  SOCKET_DISPLAY_URL: 'http://localhost:3000',
   SOCKET_EVENTS: {
     join: 'room:join',
     leave: 'room:leave',

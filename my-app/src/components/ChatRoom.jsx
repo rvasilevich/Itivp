@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { createSocket, SOCKET_EVENTS, SOCKET_URL } from '../socket';
+import { createSocket, SOCKET_EVENTS, SOCKET_DISPLAY_URL } from '../socket';
 import { getStoredUser } from '../session';
 
 const TYPING_STOP_MS = 1500;  // через сколько после ввода гасим «печатает…»
@@ -226,7 +226,7 @@ export default function ChatRoom() {
         <span>{error}</span>
         <span className="chat-hint">
           Проверьте, что сервер запущен (<code>npm run dev</code> в корне проекта) — он обслуживает
-          и REST API, и Socket.IO. Адрес: <code>{SOCKET_URL}</code>
+          и REST API, и Socket.IO. Адрес: <code>{SOCKET_DISPLAY_URL}</code>
         </span>
         <button type="button" className="btn btn-primary" onClick={() => window.location.reload()}>
           ↻ Переподключиться
@@ -367,7 +367,7 @@ export default function ChatRoom() {
         </form>
 
         <footer className="app-footer">
-          Socket.IO: <code>{SOCKET_URL}</code> (те же порт и сервер, что и REST API{' '}
+          Socket.IO: <code>{SOCKET_DISPLAY_URL}</code> (тот же сервер, что и REST API{' '}
           <code>{activeRoom ? `#${activeRoom}` : '—'}</code>). История канала хранится в MongoDB
           (<code>messages_mongo</code>), голоса — во вложенном массиве <code>reactions[]</code>.
         </footer>
